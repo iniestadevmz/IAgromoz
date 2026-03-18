@@ -1,0 +1,38 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Caches
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+venv/
+backend/venv/
+
+# Django
+*.log
+local_settings.py
+db.sqlite3
+/media/
+# Ignore migrations only if you want to recreate them, 
+# but often it's safer versionar as control version.
+# **/migrations/*.pyc
+# **/migrations/__pycache__/
+
+# PyCharm / VSCode / IDEs
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Keep .env versioned
+!.env

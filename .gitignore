@@ -1,0 +1,30 @@
+# Created by venv; see https://docs.python.org/3/library/venv.html
+# Python
+__pycache__
+*.pyc
+*.pyd
+*.pyo
+*.egg-info/
+.Python
+.venv
+env/
+venv/
+lib/
+lib64/
+include/
+bin/
+share/
+
+# Django
+db.sqlite3
+media/
+static_collected/
+
+# Environment files
+.env
+.flaskenv
+
+# IDE and other files
+.idea/
+.vscode/
+.DS_Store
