@@ -149,7 +149,6 @@ Pygments==2.19.2
 PyGObject==3.54.5
 pyinotify==0.9.6
 PyJWT==2.10.1
-pykickstart @ file:///builddir/build/BUILD/pykickstart-3.66-build/pykickstart-3.66
 pyparsing==3.3.2
 pyparted==3.13.0
 PySocks==1.7.1
@@ -165,7 +164,7 @@ python-pam==2.0.2
 pyudev==0.24.3
 pyxdg==0.28
 PyYAML==6.0.2
-pyynl @ file:///builddir/build/BUILD/kernel-6.18.13-build/kernel-6.18.13/linux-6.18.13-200.fc43.x86_64/tools/net/ynl
+
 pyzmq==27.1.0
 qrcode==8.2
 RapidFuzz==3.12.2
@@ -180,9 +179,9 @@ roman-numerals==4.1.0
 rpds-py==0.27.0
 rpm==6.0.1
 scipy==1.17.0
-selinux @ file:///builddir/build/BUILD/libselinux-3.9-build/libselinux-3.9/src
+
 Send2Trash==2.1.0
-sepolicy @ file:///builddir/build/BUILD/policycoreutils-3.9-build/selinux-3.9/python/sepolicy
+
 setools==4.6.0
 setuptools==78.1.1
 simpleline==1.9.0
