@@ -21,10 +21,11 @@ def build_comment_tree(comments):
 
 class CommentSerializer(serializers.ModelSerializer):
     replies = serializers.SerializerMethodField()
+    nome_completo = serializers.CharField(source='autor.get_full_name', read_only=True)  # Aqui
 
     class Meta:
         model = Comment
-        fields = ['id', 'post', 'autor', 'mensagem', 'parent', 'criado_em', 'atualizado_em', 'replies']
+        fields = ['id', 'post', 'autor', 'mensagem', 'parent', 'criado_em', 'atualizado_em', 'replies', 'nome_completo']
         read_only_fields = ['autor']
 
     def get_replies(self, obj):
@@ -37,10 +38,11 @@ class CommentSerializer(serializers.ModelSerializer):
 
 class PostSerializer(serializers.ModelSerializer):
     comments = serializers.SerializerMethodField(read_only=True)
+    nome_completo = serializers.CharField(source='autor.get_full_name', read_only=True)  
 
     class Meta:
         model = Post
-        fields = ['id', 'titulo', 'conteudo', 'imagem', 'autor', 'criado_em', 'atualizado_em', 'comments']
+        fields = ['id', 'titulo', 'conteudo', 'imagem', 'autor', 'criado_em', 'atualizado_em', 'comments', 'nome_completo']
         read_only_fields = ['autor']
 
     def get_comments(self, obj):
