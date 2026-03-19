@@ -6,6 +6,7 @@ from datetime import timedelta
 from api.models.feed import Post, Comment
 from api.serializers.feed import PostSerializer, CommentSerializer, build_comment_tree
 from api.permissions import IsOwnerOrAdminDelete
+from rest_framework.response import Response
 
 # Limite de edição
 EDICAO_LIMITE = timedelta(minutes=10)
