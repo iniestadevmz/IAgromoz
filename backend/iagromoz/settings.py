@@ -40,7 +40,7 @@ DEBUG = config('DEBUG', default=False, cast=bool)
 
 
 ALLOWED_HOSTS = ['IAgromoz.onrender.com']
-
+#ALLOWED_HOSTS = []
 
 # Application definition
 
@@ -57,8 +57,14 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt.token_blacklist',
     'api',
 
+    #Para upload de imagens
+    'cloudinary',
+    'cloudinary_storage',
+
 ]
 AUTH_USER_MODEL = 'api.User'
+
+DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (

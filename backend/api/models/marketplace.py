@@ -33,7 +33,7 @@ class Produto(models.Model):
     nome = models.CharField(max_length=200)
     descricao = models.TextField(blank=True)
     preco = models.DecimalField(max_digits=10, decimal_places=2)
-    foto = models.ImageField(upload_to='produtos/')
+    foto = models.ImageField(upload_to='iagromoz/produtos/')
     vendedor = models.ForeignKey(User, on_delete=models.CASCADE, related_name='produtos')
     criado_em = models.DateTimeField(auto_now_add=True)
 
