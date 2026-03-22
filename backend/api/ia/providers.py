@@ -5,8 +5,6 @@ from django.conf import settings
 client = genai.Client(api_key=settings.GOOGLE_API_KEY)
 models = client.models.list()
 
-for m in models:
-    print(f"Model: {m.name}")
 
 
 def gerar_resposta_google(prompt: str) -> str:

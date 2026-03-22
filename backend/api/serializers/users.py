@@ -9,7 +9,7 @@ class UserSerializer(serializers.ModelSerializer):
       queryset=Distrito.objects.all(),
       source='distrito',
       write_only=True,
-      required=False
+      required=True
    )
 
    password = serializers.CharField(write_only=True,required=True)

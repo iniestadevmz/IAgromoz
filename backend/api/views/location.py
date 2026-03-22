@@ -16,7 +16,7 @@ class ProvinciaViewSet(ModelViewSet):
 class DistritoViewSet(ModelViewSet):
     queryset =Distrito.objects.all()
     serializer_class = DistritoSerializer
-    print("TOTAL DISTRITOS:", queryset.count())
+    #print("TOTAL DISTRITOS:", queryset.count())
     
 
     def get_queryset(self):
