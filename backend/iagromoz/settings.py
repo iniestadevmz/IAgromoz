@@ -40,7 +40,7 @@ DEBUG = config('DEBUG', default=False, cast=bool)
 
 
 ALLOWED_HOSTS = ['IAgromoz.onrender.com']
-# ALLOWED_HOSTS = []
+#ALLOWED_HOSTS = []
 
 # Application definition
 
@@ -104,7 +104,7 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'iagromoz.wsgi.application'
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),  
+    'ACCESS_TOKEN_LIFETIME': timedelta(seconds=30),  
     'REFRESH_TOKEN_LIFETIME': timedelta(days=30),  
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,  
