@@ -64,7 +64,7 @@ class IsAdminOrOwner(BasePermission):
     """ Permite acesso somente ao admin ou ao usuário que criou o objeto. """
     def has_permission(self, request, view):
         # Apenas usuários autenticados podem acessar
-        return request.user and request.user.is_authenticate 
+        return request.user and request.user.is_authenticated
     def has_object_permission(self, request, view, obj): 
         # Métodos de leitura sempre permitidos (GET, HEAD, OPTIONS) 
         
