@@ -21,11 +21,10 @@ class DistritoViewSet(ModelViewSet):
 
     def get_queryset(self):
         id_provincia = self.request.query_params.get('id')
-        print("ID PROVINCIA RECEBIDO:", id)
         if id_provincia:
             filtrado=Distrito.objects.filter (provincia=id_provincia)
 
-            print("DISTRITOS FILTRADOS:", filtrado.count())
+           
             for i in filtrado:
                  print(i)
 

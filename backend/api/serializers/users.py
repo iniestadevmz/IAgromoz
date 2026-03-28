@@ -4,6 +4,7 @@ from api.models.location import Distrito
 from  .location import DistritoSerializer
 
 class UserSerializer(serializers.ModelSerializer):
+
    distrito=DistritoSerializer(read_only=True)
    id_distrito=serializers.PrimaryKeyRelatedField(
       queryset=Distrito.objects.all(),
@@ -11,12 +12,14 @@ class UserSerializer(serializers.ModelSerializer):
       write_only=True,
       required=True
    )
+   nome_completo = serializers.CharField(source='get_full_name', read_only=True)  # novo campo
+   
 
    password = serializers.CharField(write_only=True,required=True)
 
    class Meta:
       model= User
-      fields =['id','email','first_name','last_name','distrito','id_distrito','password','tipos','pode_vender']
+      fields =['id','email','first_name','last_name','distrito','id_distrito','password','tipos','pode_vender','nome_completo']
       read_only_fields=['id','tipos']
     
    def create(self, validated_data):

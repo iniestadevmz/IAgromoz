@@ -20,6 +20,12 @@ class UserViewSet(ModelViewSet):
             return [AllowAny()]        # cadastro
         return [IsAuthenticated()]    # resto
     
+    # Endpoint para retornar o perfil do usuário logado
+    @action(detail=False, methods=['get'], url_path='me', permission_classes=[IsAuthenticated])
+    def me(self, request):
+        serializer = self.get_serializer(request.user)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    
     @action(detail=False, methods=['put'], url_path='alterar-senha')
     def alterar_senha(self, request):
         serializer = ChangePasswordSerializer(data=request.data, context={'request': request})
