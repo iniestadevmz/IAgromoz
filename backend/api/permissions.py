@@ -40,9 +40,9 @@ class IsOwnerOrAdminDelete(BasePermission):
     - Leitura permitida para todos usuários autenticados
     """
 
-    def has_permission(self, request, view):
-        # Apenas usuários autenticados podem acessar
-        return request.user and request.user.is_authenticated
+    # def has_permission(self, request, view):
+    #     # Apenas usuários autenticados podem acessar
+    #     return request.user and request.user.is_authenticated
 
     def has_object_permission(self, request, view, obj):
         # Leitura sempre permitida
@@ -61,9 +61,13 @@ class IsOwnerOrAdminDelete(BasePermission):
         return False
 
 class IsAdminOrOwner(BasePermission): 
-    """ Permite acesso somente ao admin ou ao usuário que criou o objeto. """ 
+    """ Permite acesso somente ao admin ou ao usuário que criou o objeto. """
+    def has_permission(self, request, view):
+        # Apenas usuários autenticados podem acessar
+        return request.user and request.user.is_authenticate 
     def has_object_permission(self, request, view, obj): 
         # Métodos de leitura sempre permitidos (GET, HEAD, OPTIONS) 
+        
         if request.method in SAFE_METHODS:
             return True 
         # Permitir se o usuário for admin 
