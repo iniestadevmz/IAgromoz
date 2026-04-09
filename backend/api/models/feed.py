@@ -8,6 +8,11 @@ class Post(models.Model):
     autor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     criado_em = models.DateTimeField(auto_now_add=True)
     atualizado_em = models.DateTimeField(auto_now=True)
+    likes = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        related_name='posts_curtidos',
+        blank=True
+    )
 
     def __str__(self):
         return f"{self.titulo} - {self.autor.email}"

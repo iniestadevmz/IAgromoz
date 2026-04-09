@@ -2,6 +2,7 @@ from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, Permis
 from django.db import models
 from api.models.location import Distrito
 
+
 class UserManager(BaseUserManager):
     def create_user(self, email, password=None, **extra_fields):
         if not email:
@@ -24,7 +25,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     first_name = models.CharField(max_length=30, blank=True)
     last_name = models.CharField(max_length=30, blank=True)
     #bio = models.TextField(blank=True, null=True)
-    #avatar = models.ImageField(upload_to='avatars/', blank=True, null=True)
+    foto_perfil= models.ImageField(upload_to='iagromoz/fotos_de_perfil/', blank=True, null=True)
     distrito = models.ForeignKey(Distrito, null=True, blank=True, on_delete=models.SET_NULL)
     tipos = models.CharField(max_length=20, choices=[('ADMIN','Administrador'), ('AGRICULTOR','Agricultor')], default='AGRICULTOR')
     pode_vender = models.BooleanField(default=False)  

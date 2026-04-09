@@ -15,7 +15,8 @@ class TecnicaSerializer(serializers.ModelSerializer):
             'votos_aprovacao',
             'votos_rejeicao',
             'total_votos',
-            'status'
+            'status',
+            'imagem',
         ]
         read_only_fields = [
             'criada_por',

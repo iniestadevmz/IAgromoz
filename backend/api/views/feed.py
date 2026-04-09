@@ -7,6 +7,9 @@ from api.models.feed import Post, Comment
 from api.serializers.feed import PostSerializer, CommentSerializer, build_comment_tree
 from api.permissions import IsOwnerOrAdminDelete
 from rest_framework.response import Response
+from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
+
 
 # Limite de edição
 EDICAO_LIMITE = timedelta(minutes=10)
@@ -37,6 +40,18 @@ class PostViewSet(viewsets.ModelViewSet):
         if instance.autor != user and getattr(user, 'tipos', '') != 'ADMIN':
             raise PermissionDenied("Você não tem permissão para deletar este post.")
         instance.delete()
+    
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    def like(self, request, pk=None):
+        post = self.get_object()
+        user = request.user
+
+        if user in post.likes.all():
+            post.likes.remove(user)
+            return Response({"status": "unliked"})
+        else:
+            post.likes.add(user)
+            return Response({"status": "liked"})
 
 
 class CommentViewSet(viewsets.ModelViewSet):

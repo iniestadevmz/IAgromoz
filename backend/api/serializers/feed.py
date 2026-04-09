@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from api.models.feed import Post, Comment
 
+
 # 🔹 Função para montar árvore
 def build_comment_tree(comments):
     tree = []
@@ -38,12 +39,26 @@ class CommentSerializer(serializers.ModelSerializer):
 
 class PostSerializer(serializers.ModelSerializer):
     comments = serializers.SerializerMethodField(read_only=True)
-    nome_completo = serializers.CharField(source='autor.get_full_name', read_only=True)  
+    nome_completo = serializers.CharField(source='autor.get_full_name', read_only=True) 
+    total_likes = serializers.SerializerMethodField()
+    gostou = serializers.SerializerMethodField()
+ 
 
     class Meta:
         model = Post
-        fields = ['id', 'titulo', 'conteudo', 'imagem', 'autor', 'criado_em', 'atualizado_em', 'comments', 'nome_completo']
+        fields = ['id', 'titulo', 'conteudo', 'imagem', 'autor', 'criado_em', 'atualizado_em', 
+                  'comments', 'nome_completo', 'total_likes', 'gostou']
         read_only_fields = ['autor']
+
+    def get_total_likes(self, obj):
+        return obj.likes.count()
+    
+    def get_gostou(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return obj.likes.filter(id=request.user.id).exists()
+        return False
+    
 
     def get_comments(self, obj):
         all_comments = obj.comments.select_related('autor').all().order_by('criado_em')

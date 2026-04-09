@@ -1,7 +1,8 @@
 from django.urls import path
 from api.views.auth import  LogoutView, UserViewSet
 from api.views.location import ProvinciaViewSet, DistritoViewSet
-from api.views.marketplace import AprovarVendedorView, ListPedidosVendedorView, MeuPedidoVendedorView, PedidoVendedorCreateView, ProductViewSet
+from api.views.marketplace import (AprovarVendedorView, ListPedidosVendedorView, 
+                                   MeuPedidoVendedorView, PedidoVendedorCreateView, ProductViewSet, AvaliacaoViewSet)
 from api.views.techniques import VotarTecnicaView
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from rest_framework.routers import DefaultRouter
@@ -18,7 +19,7 @@ rote.register(r'tecnicas',TecnicaViewSet)
 rote.register(r'feed/posts', PostViewSet, basename='posts')
 rote.register(r'feed/comments', CommentViewSet, basename='comments')
 rote.register(r'marketplace/produtos',ProductViewSet)
-
+rote.register(r'marketplace/avaliacoes',AvaliacaoViewSet, basename='avaliacoes')
 
 urlpatterns = [
     path('chat/sessoes/', ChatSessionListCreateView.as_view(), name='chat_secssoes'),

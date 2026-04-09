@@ -27,6 +27,7 @@ class Tecnica(models.Model):
     )
 
     criada_em = models.DateTimeField(auto_now_add=True)
+    imagem = models.ImageField(upload_to='iagromoz/tecnicas/', null=True, blank=True)
 
     def total_votos(self):
         return self.votos_aprovacao + self.votos_rejeicao

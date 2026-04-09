@@ -2,6 +2,7 @@ from rest_framework import serializers
 from api.models.users import User
 from api.models.location import Distrito
 from  .location import DistritoSerializer
+from api.models.marketplace import media_avaliacao_vendedor, total_avaliacoes_vendedor
 
 class UserSerializer(serializers.ModelSerializer):
 
@@ -13,13 +14,15 @@ class UserSerializer(serializers.ModelSerializer):
       required=True
    )
    nome_completo = serializers.CharField(source='get_full_name', read_only=True)  # novo campo
+   total_avaliacoes_vendedor = serializers.SerializerMethodField()
+   media_avaliacao_vendedor = serializers.SerializerMethodField()   
    
-
    password = serializers.CharField(write_only=True,required=True)
 
    class Meta:
       model= User
-      fields =['id','email','first_name','last_name','distrito','id_distrito','password','tipos','pode_vender','nome_completo']
+      fields =['id','email','first_name','last_name','distrito','id_distrito','password',
+               'tipos','pode_vender','nome_completo', 'foto_perfil', 'total_avaliacoes_vendedor', 'media_avaliacao_vendedor']
       read_only_fields=['id','tipos']
     
    def create(self, validated_data):
@@ -38,6 +41,16 @@ class UserSerializer(serializers.ModelSerializer):
             instance.set_password(password)  
         instance.save()
         return instance
+   def get_total_avaliacoes_vendedor(self, obj):
+        if obj.pode_vender:
+            return total_avaliacoes_vendedor(obj)
+        return None
+   def get_media_avaliacao_vendedor(self, obj):
+        if obj.pode_vender:
+            return media_avaliacao_vendedor(obj)
+        return None
+    
+
 
 class ChangePasswordSerializer(serializers.Serializer):
     old_password = serializers.CharField(required=True)
