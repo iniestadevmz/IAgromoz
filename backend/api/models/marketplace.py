@@ -38,6 +38,7 @@ class Produto(models.Model):
         ('fertilizantes', 'Fertilizantes'),
         ('defensivos', 'Defensivos'),
         ('animais', 'Animais'),
+        ('frescos', 'Produtos Frescos'),
     ]
 
     nome = models.CharField(max_length=200)
