@@ -1,51 +1,51 @@
-from rest_framework import viewsets, permissions
+from rest_framework import viewsets
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.exceptions import PermissionDenied
 from django.utils import timezone
 from datetime import timedelta
 from api.models.feed import Post, Comment
 from api.serializers.feed import PostSerializer, CommentSerializer, build_comment_tree
-from api.permissions import IsOwnerOrAdminDelete
+from api.permissions import IsOwnerOrAdminDelete, IsFeedPublic, IsNotSeller
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 
-
-# Limite de edição
-EDICAO_LIMITE = timedelta(minutes=10)
-
+EDIT_LIMIT = timedelta(minutes=10)
 
 
 class PostViewSet(viewsets.ModelViewSet):
     serializer_class = PostSerializer
-    permission_classes = [IsOwnerOrAdminDelete]
+    permission_classes = [IsNotSeller, IsFeedPublic]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get_queryset(self):
-        return Post.objects.select_related('autor').all().order_by('-criado_em')
+        qs = Post.objects.select_related('author').all().order_by('-created_at')
+        category = self.request.query_params.get('category')
+        if category:
+            qs = qs.filter(category=category)
+        return qs
 
     def perform_create(self, serializer):
-        serializer.save(autor=self.request.user)
+        serializer.save(author=self.request.user)
 
     def perform_update(self, serializer):
         post = self.get_object()
-        if post.autor != self.request.user:
-            raise PermissionDenied("Você só pode editar seu próprio post.")
-        if timezone.now() - post.criado_em > EDICAO_LIMITE:
-            raise PermissionDenied("Prazo para editar expirado (10 minutos).")
+        if post.author != self.request.user:
+            raise PermissionDenied("You can only edit your own post.")
+        if timezone.now() - post.created_at > EDIT_LIMIT:
+            raise PermissionDenied("Edit window expired (10 minutes).")
         serializer.save()
 
     def perform_destroy(self, instance):
         user = self.request.user
-        if instance.autor != user and getattr(user, 'tipos', '') != 'ADMIN':
-            raise PermissionDenied("Você não tem permissão para deletar este post.")
+        if instance.author != user and getattr(user, 'role', '') != 'ADMIN':
+            raise PermissionDenied("You do not have permission to delete this post.")
         instance.delete()
-    
+
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def like(self, request, pk=None):
         post = self.get_object()
         user = request.user
-
         if user in post.likes.all():
             post.likes.remove(user)
             return Response({"status": "unliked"})
@@ -56,14 +56,17 @@ class PostViewSet(viewsets.ModelViewSet):
 
 class CommentViewSet(viewsets.ModelViewSet):
     serializer_class = CommentSerializer
-    permission_classes = [IsOwnerOrAdminDelete]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            return [IsNotSeller()]  # leitura bloqueada para SELLER
+        return [IsAuthenticated(), IsNotSeller(), IsOwnerOrAdminDelete()]
+
     def get_queryset(self):
-        return Comment.objects.select_related('autor', 'post').all().order_by('criado_em')
+        return Comment.objects.select_related('author', 'post').all().order_by('created_at')
 
     def list(self, request, *args, **kwargs):
-        # opcional: filtrar por post
         queryset = self.get_queryset()
         post_id = request.query_params.get('post')
         if post_id:
@@ -73,18 +76,17 @@ class CommentViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
     def perform_create(self, serializer):
-        serializer.save(autor=self.request.user)
+        serializer.save(author=self.request.user)
 
     def perform_update(self, serializer):
         comment = self.get_object()
-        prazo_edicao = timedelta(minutes=10)
-        if self.request.user != comment.autor:
-            raise PermissionDenied("Sem autorização para atualizar este comentário")
-        if timezone.now() - comment.criado_em > EDICAO_LIMITE:
-            raise PermissionDenied("Prazo para editar expirado (10 minutos).")
+        if self.request.user != comment.author:
+            raise PermissionDenied("Not authorized to update this comment.")
+        if timezone.now() - comment.created_at > EDIT_LIMIT:
+            raise PermissionDenied("Edit window expired (10 minutes).")
         serializer.save()
 
     def perform_destroy(self, instance):
-        if self.request.user != instance.autor and not self.request.user.is_staff:
-            raise PermissionDenied("Sem permissão para apagar este comentário")
+        if self.request.user != instance.author and not self.request.user.is_staff:
+            raise PermissionDenied("Not authorized to delete this comment.")
         instance.delete()

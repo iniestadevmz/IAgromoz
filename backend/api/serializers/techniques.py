@@ -1,34 +1,20 @@
 from rest_framework import serializers
-from api.models.techniques import Tecnica
+from api.models.techniques import Technique
 
-class TecnicaSerializer(serializers.ModelSerializer):
-    total_votos = serializers.SerializerMethodField()
-    criada_por = serializers.StringRelatedField(read_only=True)  # novo campo
+
+class TechniqueSerializer(serializers.ModelSerializer):
+    total_votes = serializers.SerializerMethodField()
+    created_by = serializers.CharField(source='created_by.get_full_name', read_only=True)
 
     class Meta:
-        model = Tecnica
-        fields = [
-            'id',
-            'titulo',
-            'descricao',
-            'criada_por',          # incluído
-            'votos_aprovacao',
-            'votos_rejeicao',
-            'total_votos',
-            'status',
-            'imagem',
-        ]
-        read_only_fields = [
-            'criada_por',
-            'votos_aprovacao',
-            'votos_rejeicao',
-            'status'
-        ]
-    
-    def create(self, validated_data):
-        user = self.context['request'].user  # usuário autenticado
-        return Tecnica.objects.create(criada_por=user, **validated_data)
+        model = Technique
+        fields = ['id', 'title', 'description', 'created_by', 'approval_votes',
+                  'rejection_votes', 'total_votes', 'status', 'image']
+        read_only_fields = ['created_by', 'approval_votes', 'rejection_votes', 'status']
 
-    def get_total_votos(self, obj):
-        return obj.total_votos()
-    
+    def create(self, validated_data):
+        user = self.context['request'].user
+        return Technique.objects.create(created_by=user, **validated_data)
+
+    def get_total_votes(self, obj):
+        return obj.total_votes()

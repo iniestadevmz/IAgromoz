@@ -1,68 +1,58 @@
-from api.serializers.techniques import TecnicaSerializer
 from rest_framework.views import APIView
-from rest_framework.viewsets  import ModelViewSet
+from rest_framework.viewsets import ModelViewSet
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
+from api.models.techniques import Technique
+from api.models.votes import TechniqueVote
+from api.serializers.techniques import TechniqueSerializer
+from api.permissions import IsTechniquesAuthenticated, IsNotSeller
 
-from api.models.techniques import Tecnica
-from api.models.votes import VotoTecnica
 
-class TecnicaViewSet(ModelViewSet):
-    queryset = Tecnica.objects.all()
-    serializer_class = TecnicaSerializer
+class TechniqueViewSet(ModelViewSet):
+    queryset = Technique.objects.all()
+    serializer_class = TechniqueSerializer
 
     def get_permissions(self):
-        return [IsAuthenticated()]  
-    
+        return [IsNotSeller(), IsTechniquesAuthenticated()]
+
     def get_serializer_context(self):
         context = super().get_serializer_context()
         context['request'] = self.request
         return context
-    
+
     def perform_destroy(self, instance):
         user = self.request.user
-        if user != instance.criada_por and not user.is_staff:
-            return Response({"detail": "Sem permissão para apagar esta mensagem"}, status=status.HTTP_403_FORBIDDEN)
+        if user != instance.created_by and not user.is_staff:
+            raise PermissionError("Not authorized to delete this technique.")
         instance.delete()
 
-class VotarTecnicaView(APIView):
-    permission_classes = [IsAuthenticated]
 
-    def post(self, request, tecnica_id):
-        voto = request.data.get('voto') 
+class TechniqueVoteView(APIView):
+    permission_classes = [IsAuthenticated, IsNotSeller]
 
-        if voto not in ['APROVA', 'REPROVA']:
-            return Response(
-                {"erro": "Voto inválido"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+    def post(self, request, technique_id):
+        vote = request.data.get('vote')
 
-        tecnica = Tecnica.objects.get(id=tecnica_id)
+        if vote not in ['APPROVE', 'REJECT']:
+            return Response({"error": "Invalid vote. Use 'APPROVE' or 'REJECT'."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # impede voto duplicado
-        if VotoTecnica.objects.filter(usuario=request.user, tecnica=tecnica).exists():
-            return Response(
-                {"erro": "Você já votou nesta técnica"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        try:
+            technique = Technique.objects.get(id=technique_id)
+        except Technique.DoesNotExist:
+            return Response({"error": "Technique not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        # registra voto
-        VotoTecnica.objects.create(
-            usuario=request.user,
-            tecnica=tecnica,
-            voto=voto
-        )
+        if TechniqueVote.objects.filter(user=request.user, technique=technique).exists():
+            return Response({"error": "You have already voted on this technique."}, status=status.HTTP_400_BAD_REQUEST)
 
-        if voto == 'APROVA':
-            tecnica.votos_aprovacao += 1
+        TechniqueVote.objects.create(user=request.user, technique=technique, vote=vote)
+
+        if vote == 'APPROVE':
+            technique.approval_votes += 1
         else:
-            tecnica.votos_rejeicao += 1
+            technique.rejection_votes += 1
 
-        tecnica.save()
-        tecnica.avaliar_tecnica() 
+        technique.save()
+        technique.evaluate()
 
-        return Response(
-            {"status_tecnica": tecnica.status},
-            status=status.HTTP_200_OK
-        )
+        return Response({"technique_status": technique.status}, status=status.HTTP_200_OK)

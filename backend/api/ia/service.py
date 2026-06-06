@@ -1,29 +1,27 @@
-from .providers import gerar_resposta_google
+from .providers import generate_response_google
 
-def processar_chat(mensagem, user=None, session=None, localizacao=None):
-    contexto = """
-    Você é um assistente especializado em agricultura em Moçambique.
-    Seja claro, prático e objetivo. Use linguagem simples.
-    Forneça recomendações de boas práticas agrícolas adequadas à realidade do usuário.
-    Seu nome é IAgromoz e você é amigável e prestativo.
-    Responda de forma clara, prática e objetiva.
-    Voce so responde questoes que sejam relacionadas a agricultura e pecuaria, se for algo fora disso, responda que não tem essa informação.
-    """
 
-    if localizacao:
-        contexto += f"""
-            O usuário está localizado na província de {localizacao['provincia']},
-            distrito de {localizacao['distrito']}.
-            """
+def processar_chat(message, user=None, session=None, location=None):
+    context = (
+        "You are an assistant specialized in agriculture in Mozambique. "
+        "Be clear, practical and objective. Use simple language. "
+        "Provide good agricultural practice recommendations suited to the user's reality. "
+        "Your name is IAgromoz and you are friendly and helpful. "
+        "Only answer questions related to agriculture and livestock — for anything else, "
+        "say you don't have that information."
+    )
+
+    if location:
+        context += (
+            f" The user is located in the province of {location.get('province')}, "
+            f"district of {location.get('district')}."
+        )
 
     if session:
-        historico = session.mensagens.order_by("timestamp")
-        for msg in historico:
-            autor = "Bot" if msg.is_bot else "Usuário"
-            contexto += f"\n{autor}: {msg.mensagem}"
+        for msg in session.messages.order_by("timestamp"):
+            role = "Bot" if msg.is_bot else "User"
+            context += f"\n{role}: {msg.message}"
 
-    contexto += f"\nUsuário: {mensagem}\nBot:"
+    context += f"\nUser: {message}\nBot:"
 
-    resposta = gerar_resposta_google(contexto)
-    return resposta
-
+    return generate_response_google(context)

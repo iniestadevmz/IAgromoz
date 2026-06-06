@@ -19,10 +19,12 @@ backend/venv/
 local_settings.py
 db.sqlite3
 /media/
-# Ignore migrations only if you want to recreate them, 
-# but often it's safer versionar as control version.
-# **/migrations/*.pyc
-# **/migrations/__pycache__/
+
+# Migrations — manter __init__.py, ignorar o resto
+*/migrations/*.py
+!*/migrations/__init__.py
+**/migrations/*.pyc
+**/migrations/__pycache__/
 
 # PyCharm / VSCode / IDEs
 .vscode/
@@ -34,10 +36,23 @@ db.sqlite3
 .DS_Store
 Thumbs.db
 
-# Keep .env versioned
+# Secrets
 .env
-**/migrations/*.pyc
-**/migrations/__pycache__/
-# Ignorar migrations
-*/migrations/*.py
-!*/migrations/__init__.py
+
+# Testes e ferramentas de desenvolvimento
+.pytest_cache/
+.hypothesis/
+htmlcov/
+.coverage
+coverage.xml
+*.cover
+pytest.ini
+conftest.py
+
+# Kiro (IDE local)
+.kiro/
+
+# Ficheiros gerados / irrelevantes para produção
+freeze
+=3.1
+runtime.txt

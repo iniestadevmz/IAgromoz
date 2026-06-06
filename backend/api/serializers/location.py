@@ -1,20 +1,22 @@
 from rest_framework import serializers
-from api.models.location import Provincia,Distrito
+from api.models.location import Province, District
 
-class ProvinciaSerializer (serializers.ModelSerializer):
-    class Meta:
-        model=Provincia
-        fields = ['id','nome']
 
-class DistritoSerializer(serializers.ModelSerializer):
-    provincia =ProvinciaSerializer(read_only=True)
-    
-    id_provincia=serializers.PrimaryKeyRelatedField(
-      queryset=Provincia.objects.all(),
-      source='provincia',
-      write_only=True,
-      required=True
-   )
+class ProvinceSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Distrito
-        fields =['id','nome','provincia','id_provincia']
+        model = Province
+        fields = ['id', 'name']
+
+
+class DistrictSerializer(serializers.ModelSerializer):
+    province = ProvinceSerializer(read_only=True)
+    province_id = serializers.PrimaryKeyRelatedField(
+        queryset=Province.objects.all(),
+        source='province',
+        write_only=True,
+        required=True
+    )
+
+    class Meta:
+        model = District
+        fields = ['id', 'name', 'province', 'province_id']

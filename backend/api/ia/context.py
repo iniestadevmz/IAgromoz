@@ -1,40 +1,21 @@
-
-def montar_contexto(user=None, mensagem=None):
-    """
-    Monta o contexto base (prompt) para o chatbot.
-    - Se houver usuário: usa localização da BD
-    - Se não houver: resposta geral
-    """
-
-    contexto_base = (
-        "Você é um assistente especializado em agricultura em Moçambique. "
-        "Responda de forma clara, prática e objetiva, usando linguagem simples."
+def build_context(user=None, message=None):
+    base = (
+        "You are an assistant specialized in agriculture in Mozambique. "
+        "Answer clearly, practically and objectively, using simple language."
     )
 
-    # Caso o usuário esteja autenticado e tenha localização
-    if user and getattr(user, "distrito", None):
-        distrito = user.distrito.nome
-        provincia = user.distrito.provincia.nome
-
-        contexto_localizacao = (
-            f"O usuário está localizado na província de {provincia}, "
-            f"distrito de {distrito}. "
-            "Adapte a resposta à realidade climática e agrícola dessa região."
+    if user and getattr(user, "district", None):
+        district_name = user.district.name
+        province_name = user.district.province.name
+        location_context = (
+            f"The user is located in the province of {province_name}, "
+            f"district of {district_name}. "
+            "Adapt the response to the climatic and agricultural reality of that region."
         )
     else:
-        contexto_localizacao = (
-            "O usuário não informou localização. "
-            "Forneça uma resposta geral válida para Moçambique."
+        location_context = (
+            "The user has not provided a location. "
+            "Provide a general response valid for Mozambique."
         )
 
-    # Mensagem do usuário
-    contexto_mensagem = f"Pergunta do usuário: {mensagem}"
-
-    # Prompt final
-    prompt_final = (
-        f"{contexto_base}\n\n"
-        f"{contexto_localizacao}\n\n"
-        f"{contexto_mensagem}"
-    )
-
-    return prompt_final
+    return f"{base}\n\n{location_context}\n\nUser question: {message}"

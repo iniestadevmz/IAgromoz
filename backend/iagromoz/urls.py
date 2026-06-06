@@ -22,6 +22,7 @@ from django.conf.urls.static import static
 
 def jjj(request):
     return HttpResponse("Done")
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/',include('api.urls')),

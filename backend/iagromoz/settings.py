@@ -15,6 +15,7 @@ from datetime import timedelta
 from corsheaders.defaults import default_headers
 from dotenv import load_dotenv
 import os
+import sys
 from decouple import config
 
 # Load environment variables from .env file
@@ -24,6 +25,11 @@ load_dotenv()
 GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
 
 
+
+
+AUDIT_ENABLED = os.getenv("AUDIT_ENABLED", "true").lower() == "true"
+if len(sys.argv) > 1 and sys.argv[1] in ["migrate", "makemigrations"]:
+    AUDIT_ENABLED = False
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -40,10 +46,9 @@ DEBUG = config('DEBUG', default=False, cast=bool)
 
 
 ALLOWED_HOSTS = ['IAgromoz.onrender.com']
-#ALLOWED_HOSTS = []
+#ALLOWED_HOSTS = ['192.168.88.67','localhost','127.0.0.1','192.168.0.111','192.168.10.152']
 
-# Application definition
-
+# Application definition  s0VlTa6_@T}eT=CB
 INSTALLED_APPS = [
     'corsheaders',
     'django.contrib.admin',
@@ -51,11 +56,13 @@ INSTALLED_APPS = [
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
+    
     'django.contrib.staticfiles',
     'rest_framework',
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',
     'api',
+    
 
     #Para upload de imagens
     'cloudinary',
@@ -81,7 +88,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    
+    'api.middleware.AuditMiddleware',
 ]
 MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')
 
@@ -120,6 +127,7 @@ SIMPLE_JWT = {
 #         'NAME': BASE_DIR / 'db.sqlite3',
 #     }
 # }
+
 
 import dj_database_url
 import os
@@ -184,3 +192,14 @@ CORS_ALLOW_CREDENTIALS=True
 CORS_ALLOW_HEADERS=list(default_headers) +[
     'authorization',
 ]
+
+# ---------------------------------------------------------------------------
+# Payments
+# ---------------------------------------------------------------------------
+# "MOCK"  → MockPaymentGateway (sem chamadas externas) — usar em dev/testes
+# "LIVE"  → gateway real baseado no provider do Payment
+PAYMENT_MODE = os.getenv('PAYMENT_MODE', 'MOCK')
+
+# Forçar resultado do mock (opcional): "success" | "failed" | "processing"
+# Se não definido, usa distribuição aleatória realista (80/15/5)
+MOCK_PAYMENT_RESULT = os.getenv('MOCK_PAYMENT_RESULT', None)

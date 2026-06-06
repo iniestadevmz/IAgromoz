@@ -1,0 +1,979 @@
+================================================================================
+  IAGROMOZ API — DOCUMENTAÇÃO COMPLETA
+  Base URL: /api/
+  Autenticação: Bearer Token (JWT)
+  Header: Authorization: Bearer <access_token>
+================================================================================
+
+ÍNDICE
+------
+1.  Autenticação
+2.  Utilizadores — Registo
+3.  Utilizadores — Perfil Próprio
+4.  Utilizadores — Perfil Público
+5.  Utilizadores — Upgrade para Produtor
+6.  Utilizadores — CRUD
+7.  Localização
+8.  Marketplace — Produtos
+9.  Marketplace — Avaliações
+10. Marketplace — Transações
+11. Feed — Posts
+12. Feed — Comentários
+13. Técnicas Agrícolas
+14. Chat com IA
+15. Notificações
+16. Enums
+17. Admin Dashboard — Visão Geral
+18. Admin Dashboard — Utilizadores
+19. Admin Dashboard — Produtos
+20. Admin Dashboard — Posts
+21. Admin Dashboard — Técnicas
+22. Admin Dashboard — Transações
+23. Admin Dashboard — Métricas
+24. Audit Trail
+25. Permissões
+26. Notificações Automáticas
+
+================================================================================
+1. AUTENTICAÇÃO
+================================================================================
+
+POST /api/token/
+  Auth: Pública
+  Body: {"email": "user@example.com", "password": "password123"}
+  Resposta: {"access": "<jwt_token>", "refresh": "<refresh_token>"}
+  Nota: O token "access" contém o campo "role" no payload JWT.
+
+POST /api/token/refresh/
+  Auth: Pública
+  Body: {"refresh": "<refresh_token>"}
+  Resposta: {"access": "<novo_token>"}
+
+================================================================================
+2. UTILIZADORES — REGISTO
+================================================================================
+
+POST /api/users/register/normal/
+  Auth: Pública
+  Body:
+    {"email": "joao@example.com", "password": "pass123",
+     "first_name": "João", "last_name": "Silva",
+     "district_id": 5, "gender": "M"}
+
+POST /api/users/register/producer/
+  Auth: Pública
+  Body:
+    {"email": "prod@example.com", "password": "pass123",
+     "first_name": "Maria", "last_name": "Machava",
+     "district_id": 12, "gender": "F",
+     "contact": "+258841234567", "farm_address": "Bairro Central"}
+
+POST /api/users/register/seller/
+  Auth: Pública
+  Body:
+    {"email": "sell@example.com", "password": "pass123",
+     "first_name": "Carlos", "last_name": "Nhantumbo",
+     "district_id": 3, "gender": "M",
+     "seller_type": "INDIVIDUAL", "store_name": "Loja do Carlos",
+     "nuit": "123456789", "contact": "+258841234567",
+     "store_address": "Av. Eduardo Mondlane"}
+
+================================================================================
+3. UTILIZADORES — PERFIL PRÓPRIO
+================================================================================
+
+GET /api/users/me/
+  Auth: Obrigatória — retorna perfil do utilizador autenticado.
+
+PUT /api/users/me/update/
+PATCH /api/users/me/update/
+  Auth: Obrigatória
+  Body: {"first_name": "João", "last_name": "Silva",
+         "district_id": 7, "gender": "M", "profile_photo": <file>}
+
+GET /api/users/me/full-profile/
+  Auth: Obrigatória
+  Descrição: Retorna user + producer_profile ou seller_profile num único objeto.
+  Resposta:
+    {"user": {...}, "producer_profile": {...} ou null, "seller_profile": {...} ou null}
+
+GET /api/users/me/producer-profile/
+  Auth: Obrigatória (role = PRODUCER)
+  Resposta: {"id": 1, "contact": "+258841234567", "farm_address": "Bairro Central"}
+
+PUT /api/users/me/producer-profile/update/
+PATCH /api/users/me/producer-profile/update/
+  Auth: Obrigatória (role = PRODUCER)
+  Body: {"contact": "+258841234567", "farm_address": "Nova Morada"}
+
+GET /api/users/me/seller-profile/
+  Auth: Obrigatória (role = SELLER)
+  Resposta:
+    {"id": 1, "seller_type": "INDIVIDUAL", "store_name": "Loja",
+     "nuit": "123456789", "contact": "+258841234567", "store_address": "Av. ..."}
+
+PUT /api/users/me/seller-profile/update/
+PATCH /api/users/me/seller-profile/update/
+  Auth: Obrigatória (role = SELLER)
+  Body: (mesmos campos do GET acima)
+
+POST /api/users/change-password/
+  Auth: Obrigatória
+  Body: {"old_password": "antiga", "new_password": "nova123"}
+
+POST /api/users/logout/
+  Auth: Obrigatória
+  Body: {"refresh": "<refresh_token>"}
+
+================================================================================
+4. UTILIZADORES — PERFIL PÚBLICO
+================================================================================
+
+GET /api/users/{id}/public-profile/
+  Auth: Pública
+  Descrição: Retorna perfil público de qualquer utilizador (sem dados sensíveis).
+  Resposta: nome, foto, role, avaliações (se can_sell)
+
+================================================================================
+5. UTILIZADORES — UPGRADE PARA PRODUTOR
+================================================================================
+
+POST /api/users/upgrade-to-producer/
+  Auth: Obrigatória (role = NORMAL)
+  Descrição: Submete pedido de upgrade. Fica PENDING até admin aprovar.
+             Admins recebem notificação automática.
+  Body: {"contact": "+258841234567", "farm_address": "Bairro Central"}
+  Resposta: {"detail": "Upgrade request submitted. Awaiting admin approval."}
+  Erro 400: pedido já PENDING, já APPROVED, ou role != NORMAL
+
+GET /api/users/upgrade-to-producer/status/
+  Auth: Obrigatória
+  Resposta:
+    {"id": 1, "contact": "...", "farm_address": "...",
+     "status": "PENDING", "created_at": "...", "reviewed_at": null}
+
+POST /api/users/{user_id}/approve-upgrade/
+  Auth: Obrigatória (role = ADMIN)
+  Body: {"decision": "APPROVED"} ou {"decision": "REJECTED"}
+  Nota: Se APPROVED → role muda para PRODUCER, ProducerProfile criado,
+        utilizador recebe notificação automática.
+
+================================================================================
+6. UTILIZADORES — CRUD
+================================================================================
+
+GET /api/users/
+  Auth: Obrigatória — lista todos os utilizadores.
+
+GET /api/users/{id}/
+  Auth: Obrigatória — detalhe de um utilizador.
+
+PUT /api/users/{id}/
+PATCH /api/users/{id}/
+  Auth: Obrigatória (apenas o próprio utilizador — admin não pode editar outros)
+
+DELETE /api/users/{id}/
+  Auth: Obrigatória
+
+================================================================================
+7. LOCALIZAÇÃO
+================================================================================
+
+GET /api/provinces/
+  Auth: Pública — lista todas as províncias.
+  Resposta: [{"id": 1, "name": "Maputo"}, ...]
+
+GET /api/provinces/{id}/
+  Auth: Pública
+
+POST /api/provinces/
+  Auth: Obrigatória (role = ADMIN)
+  Body: {"name": "Niassa"}
+
+PUT /api/provinces/{id}/
+PATCH /api/provinces/{id}/
+DELETE /api/provinces/{id}/
+  Auth: Obrigatória (role = ADMIN)
+
+GET /api/districts/
+  Auth: Pública
+  Query: ?id=<province_id>
+  Resposta: [{"id": 5, "name": "Matola", "province": {"id": 1, "name": "Maputo"}}]
+
+GET /api/districts/{id}/
+  Auth: Pública
+
+POST /api/districts/
+  Auth: Obrigatória (role = ADMIN)
+  Body: {"name": "Lichinga", "province_id": 10}
+
+PUT /api/districts/{id}/
+PATCH /api/districts/{id}/
+DELETE /api/districts/{id}/
+  Auth: Obrigatória (role = ADMIN)
+
+================================================================================
+8. MARKETPLACE — PRODUTOS
+================================================================================
+
+GET /api/marketplace/products/
+  Auth: Pública
+
+GET /api/marketplace/products/{id}/
+  Auth: Pública
+  Resposta inclui: stock_quantity, base_unit, units (lista de ProductUnit)
+
+POST /api/marketplace/products/
+  Auth: Obrigatória (can_sell = true)
+  Content-Type: multipart/form-data
+  Body:
+    name                    "Milho Branco"
+    description             "Milho de qualidade"
+    price                   "150.00"          ← preço por unidade base
+    photo                   <ficheiro>
+    category                "AGRICULTURE"
+    subcategory             "CEREALS"
+    subcategory_description (obrigatório se subcategory="OTHER")
+    district                5
+    stock_quantity          "1000"            ← stock em unidade base
+    base_unit               "KG"             ← UNIT | KG | TON | LITER
+
+PUT /api/marketplace/products/{id}/
+PATCH /api/marketplace/products/{id}/
+  Auth: Obrigatória (dono apenas — admin não pode editar)
+
+DELETE /api/marketplace/products/{id}/
+  Auth: Obrigatória (dono ou ADMIN)
+
+GET /api/marketplace/products/categories/
+  Auth: Pública — lista categorias e subcategorias para formulários.
+
+GET /api/marketplace/products/base_units/
+  Auth: Pública — lista unidades base do sistema.
+  Resposta: [{"value": "UNIT", "label": "Unidade"}, {"value": "KG", "label": "Quilograma"}, ...]
+
+POST /api/marketplace/products/{id}/buy/
+  Auth: Obrigatória
+  Body: {"unit_id": 3, "quantity": 2}
+    unit_id   → ID de um ProductUnit ativo do produto (opcional; se omitido usa unidade base)
+    quantity  → quantidade na unidade escolhida
+  Lógica:
+    total_base_quantity = quantity × unit.multiplier
+    amount              = quantity × unit.price
+    product.stock_quantity -= total_base_quantity
+  Erro 400: stock insuficiente, produto já do próprio utilizador, unit inativa/inexistente
+  Resposta: {"detail": "Reservation created.", "id": 42}
+
+GET /api/marketplace/products/{id}/transactions/
+  Auth: Obrigatória (vendedor do produto)
+  Resposta: [{"id": 1, "buyer": 5, "status": "RESERVED", "amount": "220.00",
+              "quantity": "2", "unit": "Dúzia", "total_base_quantity": "24"}]
+
+================================================================================
+8b. MARKETPLACE — UNIDADES DE VENDA (ProductUnit)
+================================================================================
+
+Cada produto pode ter várias unidades de venda definidas pelo vendedor.
+O stock é SEMPRE deduzido em unidade base via: total_base = quantity × multiplier
+
+TIPOS DE UNIDADE (unit_type):
+  UNIT   → Unidade
+  DOZEN  → Dúzia
+  FAVO   → Favo
+  BOX    → Caixa
+  SACK   → Saco
+  OTHER  → Outro (requer custom_unit_name)
+
+Quando unit_type = OTHER, o vendedor preenche custom_unit_name com o nome livre.
+O campo "name" na resposta resolve automaticamente:
+  - unit_type != OTHER → devolve o label do choice (ex: "Dúzia")
+  - unit_type = OTHER  → devolve custom_unit_name (ex: "Fardo")
+
+------------------------------------------------------------
+
+GET /api/marketplace/product-units/sale_unit_choices/
+  Auth: Pública — lista os tipos de unidade disponíveis para o frontend.
+  Resposta:
+    [
+      {"value": "UNIT",  "label": "Unidade"},
+      {"value": "DOZEN", "label": "Dúzia"},
+      {"value": "FAVO",  "label": "Favo"},
+      {"value": "BOX",   "label": "Caixa"},
+      {"value": "SACK",  "label": "Saco"},
+      {"value": "OTHER", "label": "Outro"}
+    ]
+
+GET /api/marketplace/product-units/
+  Auth: Obrigatória (vendedor) — lista as suas próprias units.
+
+GET /api/marketplace/product-units/{id}/
+  Auth: Obrigatória (vendedor)
+
+POST /api/marketplace/product-units/
+  Auth: Obrigatória (vendedor do produto)
+  Body:
+    product_id       5
+    unit_type        "DOZEN"        ← valor de SALE_UNIT_CHOICES
+    custom_unit_name ""             ← obrigatório apenas se unit_type = "OTHER"
+    multiplier       "12.00"        ← quantas unidades base representa
+    price            "110.00"       ← preço desta unit (definido pelo vendedor)
+    is_active        true
+  Resposta inclui campo "name" calculado automaticamente.
+
+  Exemplo com tipo personalizado:
+    unit_type        "OTHER"
+    custom_unit_name "Fardo"
+    multiplier       "30.00"
+    price            "280.00"
+
+PUT /api/marketplace/product-units/{id}/
+PATCH /api/marketplace/product-units/{id}/
+  Auth: Obrigatória (vendedor dono do produto)
+
+DELETE /api/marketplace/product-units/{id}/
+  Auth: Obrigatória (vendedor dono do produto)
+
+EXEMPLO COMPLETO:
+  Produto: Ovos  |  base_unit=UNIT  |  stock_quantity=1000  |  price=10 MT
+  Units:
+    unit_type=UNIT  → name="Unidade" → multiplier=1  → price=10 MT
+    unit_type=DOZEN → name="Dúzia"   → multiplier=12 → price=110 MT
+    unit_type=OTHER, custom_unit_name="Fardo" → multiplier=30 → price=280 MT
+  Compra: 2 Dúzias
+    total_base_quantity = 2 × 12 = 24
+    amount              = 2 × 110 = 220 MT
+    stock após compra   = 1000 - 24 = 976
+
+================================================================================
+9. MARKETPLACE — AVALIAÇÕES
+================================================================================
+
+POST /api/marketplace/ratings/{product_id}/rate_product/
+  Auth: Obrigatória
+  Body: {"score": 4.5, "comment": "Muito bom!"}
+  Erros: 400 se auto-avaliação, duplicado, ou score fora de [1.0, 5.0]
+
+POST /api/marketplace/ratings/{seller_id}/rate_seller/
+  Auth: Obrigatória
+  Body: {"score": 3.0, "comment": "Entrega rápida"}
+
+================================================================================
+10. MARKETPLACE — TRANSAÇÕES
+================================================================================
+
+FLUXO COMPLETO DE UMA TRANSAÇÃO:
+  1. Comprador faz POST /marketplace/products/{id}/buy/ com unit_id e quantity
+     → stock deduzido imediatamente; status = RESERVED
+     (vendedor recebe notificação automática)
+  2. Vendedor confirma: POST /marketplace/transactions/{id}/confirm/ → AWAITING_PAYMENT
+  3. Pagamento processado externamente → status pode ser atualizado para PAID
+  4. Vendedor conclui: POST /marketplace/transactions/{id}/conclude/ → COMPLETED
+  OU
+  2b. Vendedor cancela: POST /marketplace/transactions/{id}/cancel/ → CANCELLED
+      (stock é devolvido automaticamente ao produto)
+
+ESTADOS POSSÍVEIS:
+  RESERVED         — comprador reservou, aguarda confirmação do vendedor
+  AWAITING_PAYMENT — vendedor confirmou, aguarda pagamento
+  PAID             — pagamento recebido
+  COMPLETED        — transação concluída pelo vendedor
+  CANCELLED        — transação cancelada (stock devolvido)
+
+------------------------------------------------------------
+
+GET /api/marketplace/transactions/
+  Auth: Obrigatória
+  Resposta:
+    [
+      {
+        "id": 1,
+        "buyer_name": "Ana Costa",
+        "seller_name": "João Silva",
+        "product_name": "Ovos",
+        "unit_name": "Dúzia",
+        "quantity": "2.00",
+        "total_base_quantity": "24.00",
+        "amount": "220.00",
+        "status": "RESERVED",
+        "created_at": "2026-04-01T10:00:00Z"
+      }
+    ]
+
+GET /api/marketplace/transactions/{id}/
+  Auth: Obrigatória
+
+POST /api/marketplace/transactions/{id}/confirm/
+  Auth: Obrigatória (VENDEDOR) — RESERVED → AWAITING_PAYMENT
+
+POST /api/marketplace/transactions/{id}/cancel/
+  Auth: Obrigatória (VENDEDOR) — → CANCELLED (stock devolvido)
+
+POST /api/marketplace/transactions/{id}/conclude/
+  Auth: Obrigatória (VENDEDOR) — → COMPLETED
+
+================================================================================
+11. FEED — POSTS
+================================================================================
+
+GET /api/feed/posts/
+  Auth: Pública
+  Query: ?category=AGRICULTURE|LIVESTOCK
+
+GET /api/feed/posts/{id}/
+  Auth: Pública
+
+POST /api/feed/posts/
+  Auth: Obrigatória
+  Content-Type: multipart/form-data
+  Body: title (obrigatório), content, image, category
+
+PUT /api/feed/posts/{id}/
+PATCH /api/feed/posts/{id}/
+  Auth: Obrigatória (autor apenas, dentro de 10 min)
+
+DELETE /api/feed/posts/{id}/
+  Auth: Obrigatória (autor ou ADMIN)
+
+POST /api/feed/posts/{id}/like/
+  Auth: Obrigatória — toggle de like.
+  Resposta: {"status": "liked"} ou {"status": "unliked"}
+
+================================================================================
+12. FEED — COMENTÁRIOS
+================================================================================
+
+GET /api/feed/comments/
+  Auth: Pública
+  Query: ?post=<post_id>
+  Resposta: Árvore de comentários com replies aninhados.
+
+GET /api/feed/comments/{id}/
+  Auth: Pública
+
+POST /api/feed/comments/
+  Auth: Obrigatória
+  Body: {"post": 1, "message": "Excelente!", "parent": null}
+
+PUT /api/feed/comments/{id}/
+PATCH /api/feed/comments/{id}/
+  Auth: Obrigatória (autor apenas, dentro de 10 min)
+
+DELETE /api/feed/comments/{id}/
+  Auth: Obrigatória (autor ou staff)
+
+================================================================================
+13. TÉCNICAS AGRÍCOLAS
+================================================================================
+
+GET /api/techniques/
+  Auth: Obrigatória
+
+GET /api/techniques/{id}/
+  Auth: Obrigatória
+
+POST /api/techniques/
+  Auth: Obrigatória
+  Content-Type: multipart/form-data
+  Body: title (obrigatório), description (obrigatório), image
+
+PUT /api/techniques/{id}/
+PATCH /api/techniques/{id}/
+  Auth: Obrigatória (criador ou staff)
+
+DELETE /api/techniques/{id}/
+  Auth: Obrigatória (criador ou staff)
+
+POST /api/techniques/{technique_id}/vote/
+  Auth: Obrigatória
+  Body: {"vote": "APPROVE"} ou {"vote": "REJECT"}
+  Resposta: {"technique_status": "PENDING"|"VALIDATED"|"DISCARDED"}
+  Nota: Com 100+ votos, >=80% aprovação → VALIDATED; >=20% rejeição → DISCARDED
+
+================================================================================
+14. CHAT COM IA
+================================================================================
+
+GET /api/chat/sessions/
+  Auth: Opcional
+  Resposta: [{"session_id": 1, "title": "Como plantar milho"}, ...]
+
+POST /api/chat/sessions/
+  Auth: Opcional — cria sessão vazia.
+
+GET /api/chat/messages/?session_id={id}
+  Auth: Opcional
+
+POST /api/chat/messages/
+  Auth: Opcional
+  Body: {"message": "Como plantar milho?", "session_id": 1}
+  Resposta: Lista com 2 mensagens [user, bot]
+  Nota: session_id opcional — se omitido, cria nova sessão automaticamente.
+        Título = primeiras 6 palavras da primeira mensagem.
+
+================================================================================
+15. NOTIFICAÇÕES
+================================================================================
+
+GET /api/notifications/
+  Auth: Obrigatória
+  Resposta: [{"id": 1, "message": "...", "is_read": false, "created_at": "..."}]
+
+POST /api/notifications/{id}/read/
+  Auth: Obrigatória — marca como lida (idempotente).
+  Resposta: {"detail": "Notification marked as read."}
+
+================================================================================
+16. ENUMS (OPÇÕES DE SELEÇÃO)
+================================================================================
+
+GET /api/enums/
+  Auth: Pública
+  Resposta:
+    {
+      "product_categories": [
+        {"value": "AGRICULTURE", "label": "Agricultura",
+         "subcategories": [
+           {"value": "CITRUS", "label": "Citrinos"},
+           {"value": "TUBERS", "label": "Tubérculos"},
+           {"value": "FRUITS", "label": "Frutas"},
+           {"value": "CEREALS", "label": "Cereais"},
+           {"value": "LEGUMES", "label": "Leguminosas"},
+           {"value": "VEGETABLES", "label": "Hortícolas"},
+           {"value": "OTHER", "label": "Outro"}]},
+        {"value": "LIVESTOCK", "label": "Pecuária",
+         "subcategories": [
+           {"value": "POULTRY", "label": "Aves"},
+           {"value": "EGGS", "label": "Ovos"},
+           {"value": "SWINE", "label": "Suínos"},
+           {"value": "FISH", "label": "Peixe"},
+           {"value": "CATTLE", "label": "Bovinos"},
+           {"value": "GOATS", "label": "Caprinos"},
+           {"value": "SHEEP", "label": "Ovinos"},
+           {"value": "BEEKEEPING", "label": "Apicultura"},
+           {"value": "OTHER", "label": "Outro"}]}
+      ],
+      "seller_types": [
+        {"value": "COMPANY", "label": "Empresa"},
+        {"value": "COOPERATIVE", "label": "Cooperativa"},
+        {"value": "INDIVIDUAL", "label": "Individual"}],
+      "post_categories": [
+        {"value": "AGRICULTURE", "label": "Agricultura"},
+        {"value": "LIVESTOCK", "label": "Pecuária"}]
+    }
+
+================================================================================
+17. ADMIN DASHBOARD — VISÃO GERAL
+================================================================================
+
+GET /api/admin-dashboard/
+  Auth: Obrigatória (role = ADMIN)
+  Resposta:
+    {
+      "users": {"total": 150, "active": 145, "inactive": 5,
+                "by_role": {"NORMAL": 100, "PRODUCER": 30, "SELLER": 15, "ADMIN": 5},
+                "new_last_7_days": 8, "new_last_30_days": 25},
+      "marketplace": {"total_products": 80, "products_last_30_days": 12,
+                      "total_transactions": 45,
+                      "transactions_by_status": {"RESERVED": 5, "AWAITING_PAYMENT": 3,
+                                                  "PAID": 2, "COMPLETED": 30, "CANCELLED": 5},
+                      "completed_revenue": 12500.00, "revenue_last_30_days": 3200.00,
+                      "total_ratings": 60, "average_product_rating": 4.2,
+                      "payments": {
+                        "total": 35,
+                        "by_status": {"PENDING": 2, "PROCESSING": 1, "SUCCESS": 30, "FAILED": 2, "REFUNDED": 0},
+                        "by_method": {"MPESA": 20, "EMOLA": 8, "CARD": 2, "BANK": 0},
+                        "total_paid": 9800.00,
+                        "paid_last_30_days": 3200.00
+                      }},
+      "feed": {"total_posts": 120, "total_comments": 340,
+               "posts_last_7_days": 15, "posts_last_30_days": 45,
+               "comments_last_30_days": 120,
+               "posts_by_category": {"AGRICULTURE": 70, "LIVESTOCK": 50}},
+      "techniques": {"total": 25,
+                     "by_status": {"PENDING": 10, "VALIDATED": 12, "DISCARDED": 3}},
+      "upgrade_requests": {"total": 8, "pending": 2, "approved": 5, "rejected": 1},
+      "activity": {"logs_last_7_days": 450, "logs_last_30_days": 1800,
+                   "logins_last_30_days": 320,
+                   "unique_visitors_today": 45,
+                   "unique_visitors_last_7_days": 180,
+                   "unique_visitors_last_30_days": 520}
+    }
+
+================================================================================
+18. ADMIN DASHBOARD — GESTÃO DE UTILIZADORES
+================================================================================
+
+GET /api/admin-dashboard/users/
+  Auth: Obrigatória (role = ADMIN)
+  Query: ?role=NORMAL|PRODUCER|SELLER|ADMIN  ?is_active=true|false
+
+GET /api/admin-dashboard/users/{id}/
+  Auth: Obrigatória (role = ADMIN)
+
+POST /api/admin-dashboard/users/{id}/deactivate/
+  Auth: Obrigatória (role = ADMIN) — desativa utilizador.
+  Erro 400: não pode desativar outro admin.
+
+POST /api/admin-dashboard/users/{id}/activate/
+  Auth: Obrigatória (role = ADMIN) — ativa utilizador.
+
+DELETE /api/admin-dashboard/users/{id}/delete/
+  Auth: Obrigatória (role = ADMIN) — elimina utilizador.
+  Erro 400: não pode eliminar outro admin.
+
+GET /api/admin-dashboard/users/upgrade-requests/
+  Auth: Obrigatória (role = ADMIN)
+  Query: ?status=PENDING|APPROVED|REJECTED (default: PENDING)
+
+================================================================================
+19. ADMIN DASHBOARD — GESTÃO DE PRODUTOS
+================================================================================
+
+GET /api/admin-dashboard/products/
+  Auth: Obrigatória (role = ADMIN)
+  Query: ?category=AGRICULTURE|LIVESTOCK  ?seller=<user_id>
+
+DELETE /api/admin-dashboard/products/{id}/
+  Auth: Obrigatória (role = ADMIN)
+
+================================================================================
+20. ADMIN DASHBOARD — GESTÃO DE POSTS
+================================================================================
+
+GET /api/admin-dashboard/posts/
+  Auth: Obrigatória (role = ADMIN)
+  Query: ?category=AGRICULTURE|LIVESTOCK
+
+DELETE /api/admin-dashboard/posts/{id}/
+  Auth: Obrigatória (role = ADMIN)
+
+================================================================================
+21. ADMIN DASHBOARD — GESTÃO DE TÉCNICAS
+================================================================================
+
+GET /api/admin-dashboard/techniques/
+  Auth: Obrigatória (role = ADMIN)
+  Query: ?status=PENDING|VALIDATED|DISCARDED
+
+POST /api/admin-dashboard/techniques/{id}/validate/
+  Auth: Obrigatória (role = ADMIN) — força validação.
+
+POST /api/admin-dashboard/techniques/{id}/discard/
+  Auth: Obrigatória (role = ADMIN) — força descarte.
+
+DELETE /api/admin-dashboard/techniques/{id}/
+  Auth: Obrigatória (role = ADMIN)
+
+================================================================================
+22. ADMIN DASHBOARD — GESTÃO DE TRANSAÇÕES
+================================================================================
+
+GET /api/admin-dashboard/transactions/
+  Auth: Obrigatória (role = ADMIN)
+  Query: ?status=RESERVED|AWAITING_PAYMENT|PAID|COMPLETED|CANCELLED
+
+GET /api/admin-dashboard/transactions/{id}/
+  Auth: Obrigatória (role = ADMIN)
+
+================================================================================
+23. ADMIN DASHBOARD — MÉTRICAS E CRESCIMENTO
+================================================================================
+
+GET /api/admin-dashboard/metrics/
+  Auth: Obrigatória (role = ADMIN)
+  Query: ?period=daily|monthly  ?days=7|30|90  ?months=3|6|12
+  Resposta:
+    {
+      "period": "daily",
+      "new_users":        [{"date": "2026-04-01", "count": 3}, ...],
+      "new_products":     [...],
+      "new_posts":        [...],
+      "new_comments":     [...],
+      "new_transactions": [...],
+      "new_techniques":   [...],
+      "daily_accesses":   [...],
+      "logins":           [...],
+      "unique_visitors":  [{"date": "2026-04-01", "count": 45}, ...]
+    }
+
+================================================================================
+24. AUDIT TRAIL
+================================================================================
+
+GET /api/audit-logs/
+  Auth: Obrigatória (role = ADMIN)
+  Descrição: Audit trail completo (máx. 500 registos).
+  Query:
+    ?user_email=user@example.com
+    ?action=CREATE|UPDATE|DELETE|LOGIN|LOGIN_FAILED|LOGOUT|UPGRADE_REQUEST|...
+    ?resource=Product|Post|User|Province|District|Technique|...
+    ?resource_id=42
+    ?status=SUCCESS|FAILED
+    ?source=API|WEB|ADMIN
+    ?request_id=<uuid>
+    ?date=2026-04-01
+    ?date_from=2026-04-01
+    ?date_to=2026-04-30
+  Resposta:
+    [
+      {
+        "id": 1,
+        "user_email": "joao@example.com",
+        "action": "CREATE",
+        "resource": "Province",
+        "resource_id": "3",
+        "status": "SUCCESS",
+        "detail": "Province created (pk=3)",
+        "before": null,
+        "after": {"name": "Niassa"},
+        "ip_address": "192.168.1.1",
+        "user_agent": "Mozilla/5.0...",
+        "source": "API",
+        "request_id": "a1b2c3d4-...",
+        "timestamp": "2026-04-01T10:00:00Z"
+      }
+    ]
+
+  MODELOS AUDITADOS AUTOMATICAMENTE (via signals post_save/pre_delete):
+    Product, Post, Comment, Technique, Transaction, Rating,
+    UpgradeRequest, User, Province, District, SellerProfile,
+    ProducerProfile, Notification, ChatSession, ChatMessage, TechniqueVote
+
+  EVENTOS DE AUTH (via views):
+    LOGIN, LOGIN_FAILED → /api/token/
+    LOGOUT → /api/users/logout/
+
+================================================================================
+25. REGRAS DE PERMISSÕES
+================================================================================
+
+ADMIN:
+  - Pode DELETAR qualquer conteúdo (posts, comentários, produtos, técnicas)
+  - NÃO pode EDITAR conteúdo de outros utilizadores
+  - NÃO pode editar dados de outras contas
+  - Acesso total ao dashboard, métricas e audit logs
+  - Pode aprovar/rejeitar pedidos de upgrade
+  - Pode desativar/eliminar utilizadores (exceto outros admins)
+
+PRODUCER / SELLER (can_sell = true):
+  - Pode criar e gerir os seus próprios produtos
+  - Pode ver transações dos seus produtos
+
+NORMAL:
+  - Pode criar posts e comentários
+  - Pode comprar produtos
+  - Pode pedir upgrade para PRODUCER (aguarda aprovação do admin)
+
+TODOS:
+  - Só podem editar o próprio perfil
+  - Só podem editar os próprios posts/comentários (dentro de 10 minutos)
+  - Cada utilizador só vê as suas próprias notificações
+
+================================================================================
+26. NOTIFICAÇÕES AUTOMÁTICAS
+================================================================================
+
+1. Produto reservado (Transaction status=RESERVED):
+   → Vendedor recebe: "<Comprador> wants to buy '<Produto>'."
+
+2. Reserva confirmada pelo vendedor (Transaction status=AWAITING_PAYMENT):
+   → Comprador recebe: "'<Produto>' foi confirmado por <Vendedor>. Proceda ao pagamento..."
+
+3. Pagamento confirmado (Transaction status=PAID via Payment SUCCESS):
+   → Vendedor recebe: "Pagamento recebido de <Comprador> para '<Produto>'. Pode agora concluir a transação."
+
+4. Pedido de upgrade submetido (UpgradeRequest criado):
+   → Todos os admins recebem: "User '<Nome>' requested an upgrade to Producer."
+
+5. Pedido aprovado/rejeitado (UpgradeRequest actualizado):
+   → Utilizador recebe: "Your upgrade request has been approved/rejected."
+
+================================================================================
+CÓDIGOS HTTP
+================================================================================
+
+200 OK              — Sucesso
+201 Created         — Recurso criado
+204 No Content      — Eliminado com sucesso
+400 Bad Request     — Dados inválidos ou regra de negócio violada
+401 Unauthorized    — Token ausente ou inválido
+403 Forbidden       — Sem permissão
+404 Not Found       — Recurso não encontrado
+
+================================================================================
+27. PAGAMENTOS
+================================================================================
+
+ARQUITECTURA:
+  Payment  → representa dinheiro (independente da Transaction)
+  Transaction → representa negócio (só muda para PAID após confirmação real)
+
+  Payment SUCCESS ≠ Transaction concluída automaticamente.
+  A conclusão final (COMPLETED) continua a ser feita pelo vendedor.
+
+MODO MOCK (settings.PAYMENT_MODE = "MOCK"):
+  Todos os pagamentos usam MockPaymentGateway.
+  Nenhuma chamada externa é feita.
+  Resultado controlável via settings.MOCK_PAYMENT_RESULT:
+    "success"    → sempre sucesso
+    "failed"     → sempre falha
+    "processing" → fica em processamento (aguarda webhook)
+    (omitido)    → distribuição aleatória realista 80/15/5
+
+ESTADOS DO PAYMENT:
+  PENDING    → criado, ainda não enviado ao provider
+  PROCESSING → enviado, aguarda confirmação
+  SUCCESS    → confirmado pelo provider → Transaction muda para PAID
+  FAILED     → recusado pelo provider
+  REFUNDED   → reembolsado
+
+MÉTODOS (method):
+  MPESA | EMOLA | CARD | BANK
+
+PROVIDERS (provider):
+  PAYSUITE | E2PAYMENTS | DIRECT_MPESA | DIRECT_EMOLA | MOCK
+
+------------------------------------------------------------
+
+POST /api/payments/initiate/
+  Auth: Obrigatória (comprador da transação)
+  Body:
+    {
+      "transaction_id": 5,
+      "method": "MPESA",
+      "provider": "MOCK",
+      "phone_number": "+258841234567"
+    }
+  Regras:
+    - transação deve pertencer ao comprador autenticado
+    - status da transação deve ser RESERVED ou AWAITING_PAYMENT
+    - não pode existir pagamento activo (PENDING/PROCESSING/SUCCESS) para a mesma transação
+  Resposta 201: objecto Payment completo
+
+GET /api/payments/
+  Auth: Obrigatória
+  Descrição: Lista pagamentos do utilizador (como comprador ou vendedor).
+  Resposta: lista de Payment
+
+GET /api/payments/<reference>/
+  Auth: Obrigatória (comprador ou vendedor da transação)
+  Descrição: Detalhe de um pagamento por UUID.
+
+POST /api/payments/<reference>/verify/
+  Auth: Obrigatória (comprador ou vendedor)
+  Descrição: Força verificação do estado junto do provider (polling manual).
+  Sem body.
+  Resposta: objecto Payment actualizado.
+
+POST /api/payments/webhook/
+  Auth: Pública (validada por reference UUID)
+  Descrição: Recebe callbacks dos providers. Idempotente.
+  Body:
+    {
+      "reference": "uuid-do-payment",
+      "status": "SUCCESS" | "FAILED" | "PROCESSING",
+      "provider_transaction_id": "TXN-ABC123"  (opcional)
+    }
+  Resposta: {"detail": "Webhook processado.", "status": "SUCCESS"}
+  Nota: Se o Payment já está em estado terminal (SUCCESS/FAILED/REFUNDED),
+        o webhook é ignorado silenciosamente (idempotência).
+
+FLUXO COMPLETO:
+  1. Comprador faz POST /marketplace/products/{id}/buy/ → Transaction RESERVED
+  2. Vendedor confirma → Transaction AWAITING_PAYMENT
+  3. Comprador faz POST /payments/initiate/ → Payment PENDING → PROCESSING/SUCCESS
+  4. Provider envia POST /payments/webhook/ com status=SUCCESS
+     → Payment SUCCESS → Transaction PAID
+  5. Vendedor conclui → Transaction COMPLETED
+
+================================================================================
+================================================================================
+28. DASHBOARD DO VENDEDOR / PRODUTOR
+================================================================================
+
+GET /api/seller-dashboard/
+  Auth: Obrigatória (role = SELLER ou PRODUCER, can_sell = true)
+  Erro 403: utilizadores sem can_sell=true
+
+  Resposta:
+    {
+      "seller": {"id": 1, "name": "João Silva", "email": "...", "role": "SELLER"},
+      "products": {
+        "total": 10,
+        "new_last_30_days": 3,
+        "low_stock": [{"id": 2, "name": "Ovos", "stock_quantity": "8.00", "base_unit": "UNIT"}]
+      },
+      "transactions": {
+        "total": 45,
+        "by_status": {"RESERVED": 5, "AWAITING_PAYMENT": 3, "PAID": 2, "COMPLETED": 30, "CANCELLED": 5},
+        "new_last_7_days": 4,
+        "new_last_30_days": 12,
+        "revenue_completed": 9800.00,
+        "revenue_last_30_days": 3200.00,
+        "recent": [últimas 10 transações com produto e comprador]
+        "recent": [
+          {
+            "id": 42,
+            "status": "RESERVED",
+            "amount": "220.00",
+            "created_at": "2026-05-20T10:00:00Z",
+            "product_name": "Ovos",
+            "buyer_name": "Ana Costa"
+          }
+        ]
+      },
+      "payments": {
+        "total": 35,
+        "by_status": {"PENDING": 1, "PROCESSING": 0, "SUCCESS": 32, "FAILED": 2, "REFUNDED": 0},
+        "by_method": {"MPESA": 20, "EMOLA": 10, "CARD": 2, "BANK": 0},
+        "total_received": 9800.00,
+        "received_last_30_days": 3200.00
+      },
+      "ratings": {
+        "average_as_seller": 4.3,
+        "total_as_seller": 18,
+        "average_products": 4.1,
+        "total_products_rated": 42
+      }
+    }
+
+================================================================================
+29. RESTRIÇÕES DE ACESSO POR ROLE
+================================================================================
+
+SELLER:
+  ✔ Marketplace (produtos, transações, pagamentos, avaliações)
+  ✔ Seller Dashboard (/api/seller-dashboard/)
+  ✔ Notificações, Chat IA, Perfil
+  ✘ Feed (posts e comentários) — acesso bloqueado (403)
+  ✘ Técnicas agrícolas — acesso bloqueado (403)
+
+PRODUCER:
+  ✔ Tudo o que SELLER tem
+  ✔ Feed (posts e comentários)
+  ✔ Técnicas agrícolas
+  ✔ Seller Dashboard (/api/seller-dashboard/)
+
+NORMAL:
+  ✔ Feed, Técnicas, Marketplace (comprar), Chat IA
+  ✘ Criar produtos (requer can_sell = true)
+  ✘ Seller Dashboard
+
+ADMIN:
+  ✔ Acesso total ao Admin Dashboard
+  ✔ Leitura de tudo
+  ✘ Editar conteúdo de outros utilizadores
+
+================================================================================
+
+- Autenticação: header "Authorization: Bearer <access_token>"
+- Upload de ficheiros: Content-Type: multipart/form-data
+- O campo "role" é definido automaticamente pelo endpoint de registo
+- A "province" é derivada automaticamente do "district"
+- subcategory "OTHER" exige "subcategory_description"
+- Edição de posts/comentários: apenas dentro de 10 minutos após criação
+- PATCH permite atualização parcial
+- Acessos diários registados automaticamente por IP único por dia
+- Audit logs capturam IP, user-agent e user_email em todas as operações
+
+================================================================================

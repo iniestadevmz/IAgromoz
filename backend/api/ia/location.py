@@ -1,22 +1,18 @@
-def resolver_localizacao(user=None, gps_data=None):
-    """
-    Retorna localização apenas para CONTEXTO (não persistente)
-    """
+def resolve_location(user=None, gps_data=None):
+    """Returns location context (not persisted)."""
 
-    # Fase 2 – GPS do frontend
     if gps_data:
         return {
-            "provincia": gps_data.get("provincia"),
-            "distrito": gps_data.get("distrito"),
-            "fonte": "gps"
+            "province": gps_data.get("province"),
+            "district": gps_data.get("district"),
+            "source": "gps"
         }
 
-    # Fase 1 – Banco de dados
-    if user and hasattr(user, "distrito") and user.distrito:
+    if user and getattr(user, "district", None):
         return {
-            "provincia": user.distrito.provincia.nome,
-            "distrito": user.distrito.nome,
-            "fonte": "database"
+            "province": user.district.province.name,
+            "district": user.district.name,
+            "source": "database"
         }
 
     return None

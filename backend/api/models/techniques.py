@@ -1,55 +1,37 @@
 from django.db import models
 from api.models.users import User
 
-class Tecnica(models.Model):
+
+class Technique(models.Model):
     STATUS_CHOICES = (
-        ('PENDENTE', 'Pendente'),
-        ('VALIDADA', 'Validada'),
-        ('DESCARTADA', 'Descartada'),
+        ('PENDING', 'Pendente'),
+        ('VALIDATED', 'Validada'),
+        ('DISCARDED', 'Descartada'),
     )
 
-    titulo = models.CharField(max_length=200)
-    descricao = models.TextField()
+    title = models.CharField(max_length=200)
+    description = models.TextField()
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='techniques')
+    approval_votes = models.PositiveIntegerField(default=0)
+    rejection_votes = models.PositiveIntegerField(default=0)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
+    created_at = models.DateTimeField(auto_now_add=True)
+    image = models.ImageField(upload_to='iagromoz/techniques/', null=True, blank=True)
 
-    criada_por = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        related_name='tecnicas'
-    )
+    def total_votes(self):
+        return self.approval_votes + self.rejection_votes
 
-    votos_aprovacao = models.PositiveIntegerField(default=0)
-    votos_rejeicao = models.PositiveIntegerField(default=0)
-
-    status = models.CharField(
-        max_length=20,
-        choices=STATUS_CHOICES,
-        default='PENDENTE'
-    )
-
-    criada_em = models.DateTimeField(auto_now_add=True)
-    imagem = models.ImageField(upload_to='iagromoz/tecnicas/', null=True, blank=True)
-
-    def total_votos(self):
-        return self.votos_aprovacao + self.votos_rejeicao
-
-    def avaliar_tecnica(self):
-        """
-        Aplica a regra 80/20 quando total >= 100
-        """
-        total = self.total_votos()
-
+    def evaluate(self):
+        total = self.total_votes()
         if total < 100:
-            return  # ainda não decide
-
-        percent_aprovacao = (self.votos_aprovacao / total) * 100
-        percent_rejeicao = (self.votos_rejeicao / total) * 100
-
-        if percent_aprovacao >= 80:
-            self.status = 'VALIDADA'
-        elif percent_rejeicao >= 20:
-            self.status = 'DESCARTADA'
-
+            return
+        approval_pct = (self.approval_votes / total) * 100
+        rejection_pct = (self.rejection_votes / total) * 100
+        if approval_pct >= 80:
+            self.status = 'VALIDATED'
+        elif rejection_pct >= 20:
+            self.status = 'DISCARDED'
         self.save()
 
     def __str__(self):
-        return self.titulo
+        return self.title
