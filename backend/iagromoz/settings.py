@@ -45,7 +45,7 @@ DEBUG = config('DEBUG', default=False, cast=bool)
 # SECURITY WARNING: don't run with debug turned on in production!
 
 
-ALLOWED_HOSTS = ['IAgromoz.onrender.com']
+ALLOWED_HOSTS = config("ALLOWED_HOSTS", cast=lambda v: [s.strip() for s in v.split(",")])
 #ALLOWED_HOSTS = ['192.168.88.67','localhost','127.0.0.1','192.168.0.111','192.168.10.152']
 
 # Application definition  s0VlTa6_@T}eT=CB
@@ -130,10 +130,18 @@ SIMPLE_JWT = {
 
 
 import dj_database_url
-import os
+
+from decouple import config
 
 DATABASES = {
-    'default': dj_database_url.parse(os.environ.get("DATABASE_URL"))
+    "default": {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": config("DATABASE_NAME"),
+        "USER": config("DATABASE_USER"),
+        "PASSWORD": config("DATABASE_PASSWORD"),
+        "HOST": config("DATABASE_HOST"),
+        "PORT": config("DATABASE_PORT"),
+    }
 }
 
 
@@ -203,3 +211,17 @@ PAYMENT_MODE = os.getenv('PAYMENT_MODE', 'MOCK')
 # Forçar resultado do mock (opcional): "success" | "failed" | "processing"
 # Se não definido, usa distribuição aleatória realista (80/15/5)
 MOCK_PAYMENT_RESULT = os.getenv('MOCK_PAYMENT_RESULT', None)
+
+# SEGURANÇA PARA PRODUÇÃO (Só ativa quando DEBUG=False)
+if not DEBUG:
+    # Redirecionar todo o tráfego HTTP para HTTPS (W008)
+    SECURE_SSL_REDIRECT = True
+    
+    # Proteger os cookies para só passarem por HTTPS (W012 e W016)
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+        
+    # HSTS - Força os navegadores a usarem sempre HTTPS (W004)
+    SECURE_HSTS_SECONDS = 31536000  # 1 ano
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
