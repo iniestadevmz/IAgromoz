@@ -5,13 +5,14 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from api.views.auth import UserViewSet
 from api.views.location import ProvinceViewSet, DistrictViewSet
 from api.views.marketplace import ProductViewSet, ProductUnitViewSet, RatingViewSet, TransactionViewSet
+from api.views.marketplace_chat import MarketplaceChatViewSet, ReservationChatView
 from api.views.techniques import TechniqueViewSet, TechniqueVoteView
 from api.views.token import CustomTokenObtainPairView
 from api.views.chat import ChatMessageListCreateView, ChatSessionListCreateView
 from api.views.feed import CommentViewSet, PostViewSet
 from api.views.notifications import NotificationListView, NotificationMarkReadView
 from api.views.enums import EnumsView
-from api.views.audit import AuditLogListView
+from api.views.audit import AuditLogListView, SecurityLogListView, AuditStatsView
 from api.views.visits import PageVisitListView
 from api.views.dashboard import (
     AdminDashboardView, AdminMetricsView,
@@ -24,6 +25,7 @@ from api.views.payment import (
     InitiatePaymentView, PaymentDetailView,
     VerifyPaymentView, PaymentWebhookView, PaymentListView,
 )
+from api.authentication.views.google import GoogleAuthView
 
 # ---------------------------------------------------------------------------
 # Routers
@@ -39,6 +41,8 @@ router.register(r'marketplace/products', ProductViewSet)
 router.register(r'marketplace/product-units', ProductUnitViewSet, basename='product-units')
 router.register(r'marketplace/ratings', RatingViewSet, basename='ratings')
 router.register(r'marketplace/transactions', TransactionViewSet, basename='transactions')
+router.register(r'marketplace/chats', MarketplaceChatViewSet, basename='marketplace-chats')
+router.register(r'marketplace/reservations', ReservationChatView, basename='reservation-chat')
 
 admin_router = DefaultRouter()
 admin_router.register(r'admin-dashboard/users',        AdminUserManagementViewSet,        basename='admin-users')
@@ -54,6 +58,9 @@ urlpatterns = [
     # Auth
     path('token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+
+    # Google OAuth
+    path('auth/google/', GoogleAuthView.as_view(), name='google_auth'),
 
     # Chat
     path('chat/sessions/', ChatSessionListCreateView.as_view(), name='chat_sessions'),
@@ -71,6 +78,8 @@ urlpatterns = [
 
     # Audit trail
     path('audit-logs/', AuditLogListView.as_view(), name='audit_logs'),
+    path('audit-logs/security/', SecurityLogListView.as_view(), name='security_logs'),
+    path('audit-logs/stats/', AuditStatsView.as_view(), name='audit_stats'),
 
     # Page visits
     path('page-visits/', PageVisitListView.as_view(), name='page_visits'),

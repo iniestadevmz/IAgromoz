@@ -124,32 +124,84 @@ class PublicProfileSerializer(serializers.Serializer):
 
     def get_producer_profile(self, obj):
         if obj.role == 'PRODUCER' and hasattr(obj, 'producer_profile'):
+            contact = obj.producer_profile.contact
+            masked = ('***' + contact[-3:]) if contact and len(contact) > 3 else '***'
             return {
-                "contact": obj.producer_profile.contact,
+                "contact": masked,
                 "farm_address": obj.producer_profile.farm_address,
             }
         return None
 
     def get_seller_profile(self, obj):
         if obj.role == 'SELLER' and hasattr(obj, 'seller_profile'):
+            contact = obj.seller_profile.contact
+            masked = ('***' + contact[-3:]) if contact and len(contact) > 3 else '***'
             return {
                 "store_name": obj.seller_profile.store_name,
                 "seller_type": obj.seller_profile.seller_type,
                 "store_address": obj.seller_profile.store_address,
-                "contact": obj.seller_profile.contact,
+                "contact": masked,
             }
         return None
 
 class SellerProfileSerializer(serializers.ModelSerializer):
+    nuit = serializers.SerializerMethodField()
+    contact = serializers.SerializerMethodField()
+
     class Meta:
         model = SellerProfile
         fields = ['id', 'seller_type', 'store_name', 'nuit', 'contact', 'store_address']
 
+    def _is_owner_or_admin(self, obj):
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+        return (
+            request.user == obj.user
+            or getattr(request.user, 'role', '') == 'ADMIN'
+            or request.user.is_staff
+        )
+
+    def get_nuit(self, obj):
+        if self._is_owner_or_admin(obj):
+            return obj.nuit
+        # Mascarar: mostra apenas os últimos 3 dígitos
+        if obj.nuit and len(obj.nuit) > 3:
+            return '***' + obj.nuit[-3:]
+        return '***' if obj.nuit else None
+
+    def get_contact(self, obj):
+        if self._is_owner_or_admin(obj):
+            return obj.contact
+        # Mascarar contacto: mostra apenas os últimos 3 dígitos
+        if obj.contact and len(obj.contact) > 3:
+            return '***' + obj.contact[-3:]
+        return '***' if obj.contact else None
+
 
 class ProducerProfileSerializer(serializers.ModelSerializer):
+    contact = serializers.SerializerMethodField()
+
     class Meta:
         model = ProducerProfile
         fields = ['id', 'contact', 'farm_address']
+
+    def _is_owner_or_admin(self, obj):
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+        return (
+            request.user == obj.user
+            or getattr(request.user, 'role', '') == 'ADMIN'
+            or request.user.is_staff
+        )
+
+    def get_contact(self, obj):
+        if self._is_owner_or_admin(obj):
+            return obj.contact
+        if obj.contact and len(obj.contact) > 3:
+            return '***' + obj.contact[-3:]
+        return '***' if obj.contact else None
 
 
 class ChangePasswordSerializer(serializers.Serializer):

@@ -1,16 +1,17 @@
 from rest_framework import generics, status
 from rest_framework.response import Response
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from api.models.chat import ChatSession, ChatMessage
 from api.serializers.chat import ChatSessionSerializer, ChatMessageSerializer, ChatSessionTitleSerializer
 from api.ia.service import processar_chat
+from api.throttles import chat_ai_rate_limit
 
 DEFAULT_TITLE = "Nova conversa"
 
 
 class ChatSessionListCreateView(generics.ListCreateAPIView):
     serializer_class = ChatSessionSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def get_serializer_class(self):
         if self.request.method == 'GET':
@@ -18,16 +19,12 @@ class ChatSessionListCreateView(generics.ListCreateAPIView):
         return super().get_serializer_class()
 
     def get_queryset(self):
-        if self.request.user.is_authenticated:
-            return ChatSession.objects.filter(user=self.request.user)
-        return ChatSession.objects.none()
+        return ChatSession.objects.filter(user=self.request.user)
 
     def create(self, request, *args, **kwargs):
-        if request.user.is_authenticated:
-            session = ChatSession.objects.create(user=request.user, title=DEFAULT_TITLE)
-            serializer = self.get_serializer(session)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response({"title": "Anonymous Chat", "messages": []}, status=status.HTTP_201_CREATED)
+        session = ChatSession.objects.create(user=request.user, title=DEFAULT_TITLE)
+        serializer = self.get_serializer(session)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
 class ChatMessageListCreateView(generics.ListCreateAPIView):
@@ -36,8 +33,11 @@ class ChatMessageListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         session_id = self.request.query_params.get("session_id")
-        if session_id:
-            return ChatMessage.objects.filter(session_id=session_id).order_by("timestamp")
+        if session_id and self.request.user.is_authenticated:
+            return ChatMessage.objects.filter(
+                session_id=session_id,
+                session__user=self.request.user,
+            ).order_by("timestamp")
         return ChatMessage.objects.none()
 
     def list(self, request, *args, **kwargs):
@@ -50,6 +50,7 @@ class ChatMessageListCreateView(generics.ListCreateAPIView):
             return Response(serializer.data)
         return Response([], status=status.HTTP_200_OK)
 
+    @chat_ai_rate_limit
     def create(self, request, *args, **kwargs):
         session_id = request.data.get("session_id")
         user_message = request.data.get("message")
@@ -79,7 +80,6 @@ class ChatMessageListCreateView(generics.ListCreateAPIView):
             msg_bot = ChatMessage.objects.create(
                 session=session, message=bot_response, is_bot=True, user=session.user
             )
-
             serializer = self.get_serializer([msg_user, msg_bot], many=True)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         else:

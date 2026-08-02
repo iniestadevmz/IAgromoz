@@ -23,7 +23,23 @@ class UserManager(BaseUserManager):
             raise ValueError("Campo last_name é obrigatório")
         return self.create_user(email, password, **extra_fields)
 
+    def create_google_user(self, email, google_id, first_name='', last_name='', avatar=''):
+        """Cria utilizador via Google sem password."""
+        user = self.model(
+            email=self.normalize_email(email),
+            first_name=first_name,
+            last_name=last_name,
+            google_id=google_id,
+            avatar=avatar,
+            provider='GOOGLE',  # usar string directa — User ainda não está definida aqui
+            email_verified=True,
+            profile_completed=False,
+        )
+        user.set_unusable_password()
+        user.save(using=self._db)
+        return user
 
+from django.utils import timezone
 class User(AbstractBaseUser, PermissionsMixin):
     ROLE_CHOICES = [
         ('ADMIN', 'Admin'),
@@ -37,22 +53,44 @@ class User(AbstractBaseUser, PermissionsMixin):
         ('F', 'Feminino'),
     ]
 
+    PROVIDER_EMAIL = 'EMAIL'
+    PROVIDER_GOOGLE = 'GOOGLE'
+    PROVIDER_CHOICES = [
+        (PROVIDER_EMAIL, 'Email'),
+        (PROVIDER_GOOGLE, 'Google'),
+    ]
+
     email = models.EmailField(unique=True)
-    first_name = models.CharField(max_length=30)
-    last_name = models.CharField(max_length=30)
+    first_name = models.CharField(max_length=30, blank=True)
+    last_name = models.CharField(max_length=30, blank=True)
     profile_photo = models.ImageField(upload_to='iagromoz/fotos_de_perfil/', blank=True, null=True)
-    district = models.ForeignKey(District, null=True, on_delete=models.SET_NULL)
+    district = models.ForeignKey(District, null=True, blank=True, on_delete=models.SET_NULL)
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='NORMAL')
     can_sell = models.BooleanField(default=False)
     gender = models.CharField(max_length=1, choices=GENDER_CHOICES, null=True, blank=True)
 
+    # Auth provider
+    provider = models.CharField(max_length=10, choices=PROVIDER_CHOICES, default=PROVIDER_EMAIL)
+    google_id = models.CharField(max_length=128, unique=True, null=True, blank=True)
+    avatar = models.URLField(max_length=500, blank=True, null=True)
+    email_verified = models.BooleanField(default=False)
+
+    # Profile completion
+    profile_completed = models.BooleanField(default=False)
+    phone = models.CharField(max_length=30, blank=True, null=True)
+
+    # Audit
+    last_login_ip = models.GenericIPAddressField(null=True, blank=True)
+    created_at = models.DateTimeField(  default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+    
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
 
     objects = UserManager()
 
     USERNAME_FIELD = 'email'
-    REQUIRED_FIELDS = ['first_name','last_name']
+    REQUIRED_FIELDS = ['first_name', 'last_name']
 
     def __str__(self):
         return self.email

@@ -1,24 +1,58 @@
 """
 Audit Logger Service
 ====================
-Single source of truth for all audit logging.
+Ponto central de auditoria. Nunca lança exceções.
 
-Import:
+Uso:
     from api.services.audit_logger import log_action
 
-Key fix:
-    - `user` parameter is ALWAYS respected when passed explicitly
-    - Falls back to request.user only when user=None AND request has authenticated user
-    - LOGIN logs pass user explicitly — never rely on request.user for auth events
+Melhorias:
+- Device info (browser, OS, device type)
+- Snapshot seguro (exclui campos sensíveis)
+- Hash encadeado para integridade
+- SecurityLog automático para eventos críticos
 """
-
 import uuid
 import logging
 
-logger = logging.getLogger("api.audit")
+logger = logging.getLogger('api.audit')
 
-_CRUD_ACTIONS = {"CREATE", "UPDATE", "DELETE"}
+CRUD_ACTIONS = {'CREATE', 'UPDATE', 'DELETE'}
 
+# Campos excluídos dos snapshots before/after
+SENSITIVE_FIELDS = {
+    'password', 'token', 'jwt', 'secret', 'api_key',
+    'refresh_token', 'access_token', 'id_token', 'google_id',
+    'last_login', 'password_hash',
+}
+
+# Acções que geram também SecurityLog
+SECURITY_ACTIONS = {
+    'LOGIN', 'LOGIN_FAILED', 'LOGOUT',
+    'ROLE_CHANGED', 'PASSWORD_CHANGED', 'PERMISSION_DENIED',
+    'GOOGLE_LOGIN', 'GOOGLE_LINKED',
+}
+
+# Mapeamento de severity por acção
+ACTION_SEVERITY = {
+    'DELETE': 'HIGH',
+    'ROLE_CHANGED': 'HIGH',
+    'LOGIN_FAILED': 'MEDIUM',
+    'PERMISSION_DENIED': 'MEDIUM',
+    'PASSWORD_CHANGED': 'MEDIUM',
+    'CREATE': 'LOW',
+    'UPDATE': 'LOW',
+    'LOGIN': 'LOW',
+    'LOGOUT': 'LOW',
+    'VIEW': 'LOW',
+    'REQUEST': 'LOW',
+    'GOOGLE_LOGIN': 'LOW',
+}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Helpers
+# ─────────────────────────────────────────────────────────────────────────────
 
 def _get_current_request():
     try:
@@ -31,117 +65,130 @@ def _get_current_request():
 def _get_ip(request):
     if request is None:
         return None
-    x_forwarded = request.META.get("HTTP_X_FORWARDED_FOR")
-    if x_forwarded:
-        return x_forwarded.split(",")[0].strip()
-    return request.META.get("REMOTE_ADDR")
+    try:
+        from api.middleware import get_client_ip
+        return get_client_ip(request)
+    except Exception:
+        return request.META.get('REMOTE_ADDR')
 
 
-def _get_user_agent(request):
+def _get_user_agent(request) -> str:
     if request is None:
-        return ""
-    return request.META.get("HTTP_USER_AGENT", "")
+        return ''
+    return request.META.get('HTTP_USER_AGENT', '')
 
 
-def _get_request_id(request):
+def _get_request_id(request) -> str:
     if request is None:
         return str(uuid.uuid4())
-    return getattr(request, "audit_request_id", str(uuid.uuid4()))
+    return getattr(request, 'audit_request_id', str(uuid.uuid4()))
 
 
-def _resolve_user_from_request(request):
-    """Get authenticated user from request — only used as fallback."""
-    if request and hasattr(request, "user") and request.user.is_authenticated:
+def _resolve_user(user, request):
+    if user is not None:
+        return user
+    if request and hasattr(request, 'user') and request.user.is_authenticated:
         return request.user
     return None
 
 
-def serialize_instance(instance):
-    """Safely serialize a model instance to a plain dict."""
+def _safe_snapshot(data: dict) -> dict:
+    """Remove campos sensíveis do snapshot."""
+    if not data:
+        return data
+    return {k: v for k, v in data.items() if k.lower() not in SENSITIVE_FIELDS}
+
+
+def _get_previous_hash() -> str:
+    try:
+        from api.models.audit import AuditLog
+        last = AuditLog.objects.only('current_hash').order_by('-timestamp').first()
+        return last.current_hash if last else ''
+    except Exception:
+        return ''
+
+
+def serialize_instance(instance) -> dict:
+    """Serializa instância para JSON seguro, excluindo campos sensíveis."""
     if instance is None:
         return None
     try:
-        from django.forms.models import model_to_dict
-        data = model_to_dict(instance)
-        return {
-            k: v if isinstance(v, (str, int, float, bool, type(None))) else str(v)
-            for k, v in data.items()
-        }
-    except Exception as e:
-        logger.debug(f"[AuditLog] serialize_instance failed: {e}")
+        from api.signals.utils import safe_serialize
+        data = safe_serialize(instance)
+        return _safe_snapshot(data) if data else None
+    except Exception:
         return None
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Main logger
+# ─────────────────────────────────────────────────────────────────────────────
+
 def log_action(
     *,
-    action,
-    user=None,              # EXPLICIT user — always respected (e.g. for LOGIN)
-    resource="",
+    action: str,
+    user=None,
+    resource: str = '',
     instance=None,
     resource_id=None,
-    status="SUCCESS",
-    severity="LOW",
-    detail="",
-    before=None,
-    after=None,
+    status: str = 'SUCCESS',
+    severity: str = None,
+    detail: str = '',
+    before: dict = None,
+    after: dict = None,
     request=None,
-    source="API",
+    source: str = 'API',
 ):
     """
-    Record an audit log entry. Never raises.
+    Cria entrada no AuditLog.
 
-    Parameters
-    ----------
-    user        : User instance — ALWAYS used when provided (critical for LOGIN)
-    action      : str — CREATE, UPDATE, DELETE, LOGIN, LOGOUT, LOGIN_FAILED, etc.
-    resource    : str — model name, e.g. 'Product', 'Auth'
-    instance    : model instance — pk extracted automatically for CRUD
-    resource_id : str — manual fallback when instance is not available
-    status      : 'SUCCESS' or 'FAILED'
-    severity    : 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'
-    detail      : human-readable description
-    before/after: dict snapshots for UPDATE/DELETE
-    request     : Django request (for IP, user-agent, request_id)
-    source      : 'API', 'WEB', 'ADMIN'
+    user:     utilizador explícito — sempre tem prioridade
+    severity: se None, inferido pela acção
     """
     try:
         from api.models.audit import AuditLog
+        from api.services.device_info import parse_device_info
 
-        # Use thread-local request as fallback if not passed
         if request is None:
             request = _get_current_request()
 
-        # ── Resolve resource and resource_id from instance ────────────────
+        # Resolve instância
         if instance is not None:
             resource = instance.__class__.__name__
-            resource_id = str(instance.pk) if instance.pk is not None else ""
+            resource_id = str(instance.pk) if instance.pk else ''
 
-        resolved_resource_id = str(resource_id) if resource_id is not None else ""
+        resolved_resource_id = str(resource_id) if resource_id is not None else ''
 
-        # ── Validate CRUD must have resource_id ───────────────────────────
-        if action in _CRUD_ACTIONS and not resolved_resource_id:
-            logger.warning(
-                f"[AuditLog] BLOCKED: action={action} resource={resource} "
-                f"has empty resource_id."
-            )
+        if action in CRUD_ACTIONS and not resolved_resource_id:
+            logger.warning(f'[AuditLog] Blocked {action} — missing resource_id')
             return None
 
-        # ── Resolve user ──────────────────────────────────────────────────
-        # IMPORTANT: explicit `user` parameter always wins.
-        # Only fall back to request.user if user was not passed.
-        if user is None:
-            user = _resolve_user_from_request(request)
+        # Resolve user
+        user = _resolve_user(user, request)
+        user_email = getattr(user, 'email', '') or ''
 
-        user_email = getattr(user, "email", "") or ""
+        # Source
+        if source == 'API' and request:
+            if getattr(request, 'path', '').startswith('/admin/'):
+                source = 'ADMIN'
 
-        # ── Resolve source ────────────────────────────────────────────────
-        if source == "API" and request:
-            path = getattr(request, "path", "")
-            if path.startswith("/admin/"):
-                source = "ADMIN"
+        # Severity auto
+        if severity is None:
+            severity = ACTION_SEVERITY.get(action, 'LOW')
 
-        entry = AuditLog.objects.create(
-            user=user if (user and getattr(user, "pk", None)) else None,
+        # Device info
+        ua = _get_user_agent(request)
+        device = parse_device_info(ua)
+
+        # Snapshots seguros
+        safe_before = _safe_snapshot(before) if before else None
+        safe_after = _safe_snapshot(after) if after else None
+
+        # Hash encadeado
+        previous_hash = _get_previous_hash()
+
+        entry = AuditLog(
+            user=user if (user and getattr(user, 'pk', None)) else None,
             user_email=user_email,
             action=action,
             resource=resource,
@@ -149,23 +196,64 @@ def log_action(
             status=status,
             severity=severity,
             detail=detail,
-            before=before,
-            after=after,
+            before=safe_before,
+            after=safe_after,
             ip_address=_get_ip(request),
-            user_agent=_get_user_agent(request),
-            http_method=getattr(request, "method", "") if request else "",
-            path=getattr(request, "path", "") if request else "",
+            user_agent=ua,
+            http_method=getattr(request, 'method', '') if request else '',
+            path=getattr(request, 'path', '') if request else '',
             query_params=request.GET.dict() if request else None,
             source=source,
             request_id=_get_request_id(request),
+            browser=device['browser'],
+            operating_system=device['operating_system'],
+            device_type=device['device_type'],
+            previous_hash=previous_hash,
         )
 
+        # Calcular hash após preencher campos
+        entry.save()
+        entry.current_hash = entry.compute_hash()
+        entry.save(update_fields=['current_hash'])
+
         logger.debug(
-            f"[AuditLog] {action} {resource} id={resolved_resource_id} "
-            f"user={user_email or 'anonymous'} status={status}"
+            f'[AuditLog] {action} {resource} id={resolved_resource_id} '
+            f'user={user_email or "anonymous"} status={status}'
         )
+
+        # Espelhar em SecurityLog para eventos críticos
+        if action in SECURITY_ACTIONS:
+            _mirror_to_security_log(entry, action, user, request)
+
         return entry
 
     except Exception as exc:
-        logger.warning(f"[AuditLog] Failed to record log: {exc}")
+        logger.warning(f'[AuditLog] Failed: {exc}')
         return None
+
+
+def _mirror_to_security_log(audit_entry, action: str, user, request):
+    """Replica eventos de segurança no SecurityLog."""
+    try:
+        from api.services.security_logger import log_security_event
+        event_map = {
+            'LOGIN': 'LOGIN',
+            'LOGIN_FAILED': 'LOGIN_FAILED',
+            'LOGOUT': 'LOGOUT',
+            'ROLE_CHANGED': 'ROLE_CHANGED',
+            'PASSWORD_CHANGED': 'PASSWORD_CHANGED',
+            'PERMISSION_DENIED': 'PERMISSION_DENIED',
+            'GOOGLE_LOGIN': 'GOOGLE_LOGIN',
+            'GOOGLE_LINKED': 'GOOGLE_LINKED',
+        }
+        event_type = event_map.get(action)
+        if event_type:
+            log_security_event(
+                event_type=event_type,
+                user=user,
+                request=request,
+                detail=audit_entry.detail,
+                source=audit_entry.source,
+            )
+    except Exception:
+        pass

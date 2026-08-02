@@ -1,10 +1,35 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.db.models import Avg
-from api.models.marketplace import Product, ProductUnit, Rating, Transaction
+from api.models.marketplace import Product, ProductPhoto, ProductUnit, Rating, Transaction
 from api.models.location import District
 
 User = get_user_model()
+
+ALLOWED_IMAGE_TYPES = {'image/jpeg', 'image/png', 'image/webp'}
+MAX_IMAGE_SIZE_MB = 5
+
+
+def validate_image_file(image):
+    """Valida tipo MIME e tamanho de ficheiros de imagem."""
+    if hasattr(image, 'content_type') and image.content_type not in ALLOWED_IMAGE_TYPES:
+        raise serializers.ValidationError(
+            f"Tipo de ficheiro não suportado. Use: {', '.join(ALLOWED_IMAGE_TYPES)}"
+        )
+    if image.size > MAX_IMAGE_SIZE_MB * 1024 * 1024:
+        raise serializers.ValidationError(
+            f"A imagem não pode exceder {MAX_IMAGE_SIZE_MB}MB."
+        )
+    return image
+
+
+class ProductPhotoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProductPhoto
+        fields = ['id', 'image', 'order']
+
+    def validate_image(self, value):
+        return validate_image_file(value)
 
 
 class ProductUnitSerializer(serializers.ModelSerializer):
@@ -47,20 +72,21 @@ class ProductSerializer(serializers.ModelSerializer):
         queryset=District.objects.all(), allow_null=True, required=False
     )
     units = ProductUnitSerializer(many=True, read_only=True)
+    photos = ProductPhotoSerializer(many=True, read_only=True)
 
     class Meta:
         model = Product
         fields = [
-            'id', 'seller', 'name', 'description', 'price', 'photo', 'created_at',
+            'id', 'seller', 'name', 'description', 'price', 'created_at',
             'category', 'subcategory', 'subcategory_description',
             'district', 'province',
             'stock_quantity', 'base_unit',
-            'units',
+            'units', 'photos',
             'average_rating', 'total_ratings', 'user_rated',
         ]
         read_only_fields = [
             'seller', 'created_at', 'average_rating', 'total_ratings',
-            'user_rated', 'province', 'units',
+            'user_rated', 'province', 'units', 'photos',
         ]
 
     def get_province(self, obj):

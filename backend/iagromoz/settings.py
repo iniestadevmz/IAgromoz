@@ -23,6 +23,7 @@ load_dotenv()
 
 
 GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
+GOOGLE_CLIENT_ID = config('GOOGLE_CLIENT_ID', default='')
 
 
 
@@ -30,6 +31,20 @@ GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
 AUDIT_ENABLED = os.getenv("AUDIT_ENABLED", "true").lower() == "true"
 if len(sys.argv) > 1 and sys.argv[1] in ["migrate", "makemigrations"]:
     AUDIT_ENABLED = False
+
+# ---------------------------------------------------------------------------
+# Cache — usar memória local em dev, Redis em prod
+# ---------------------------------------------------------------------------
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'iagromoz-cache',
+    }
+}
+
+# Bloqueio de conta após N tentativas de login falhadas
+ACCOUNT_LOCKOUT_MAX_ATTEMPTS = 5
+ACCOUNT_LOCKOUT_DURATION_SECONDS = 600  # 10 minutos
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -40,7 +55,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = config('DJANGO_SECRET_KEY')
-DEBUG = config('DEBUG', default=False, cast=bool)
+DEBUG = config('DEBUG', default=True, cast=bool)
 
 # SECURITY WARNING: don't run with debug turned on in production!
 
@@ -77,17 +92,23 @@ REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
+    # Paginação global — todos os endpoints de lista usam cursor pagination
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 20,
 }
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'django.middleware.gzip.GZipMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'api.exception_logging_middleware.ExceptionLoggingMiddleware',
+    'api.request_logging_middleware.RequestLoggingMiddleware',
     'api.middleware.AuditMiddleware',
 ]
 MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')
@@ -111,10 +132,12 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'iagromoz.wsgi.application'
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),  
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=30),  
+    # Access token: 15 min — token roubado expira rapidamente
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),
+    # Refresh token: 7 dias — equilíbrio entre segurança e usabilidade
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
     'ROTATE_REFRESH_TOKENS': True,
-    'BLACKLIST_AFTER_ROTATION': True,  
+    'BLACKLIST_AFTER_ROTATION': True,
 }
 
 
@@ -169,7 +192,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'pt-PT'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'Africa/Maputo'
 
 USE_I18N = True
 
@@ -195,11 +218,31 @@ STORAGES = {
 }
 
 
-CORS_ALLOW_ALL_ORIGINS=True
-CORS_ALLOW_CREDENTIALS=True
-CORS_ALLOW_HEADERS=list(default_headers) +[
-    'authorization',
-]
+# ---------------------------------------------------------------------------
+# CORS
+# ---------------------------------------------------------------------------
+# Em desenvolvimento (DEBUG=True): permite todas as origens por padrão
+# Em produção (DEBUG=False): restringe às origens definidas em CORS_ALLOWED_ORIGINS
+#
+# Exemplos de configuração no .env:
+#
+#   Desenvolvimento:
+#     CORS_ALLOW_ALL_ORIGINS=True
+#
+#   Produção:
+#     CORS_ALLOW_ALL_ORIGINS=False
+#     CORS_ALLOWED_ORIGINS=https://app.exemplo.com,https://www.app.exemplo.com
+
+_cors_allow_all = config('CORS_ALLOW_ALL_ORIGINS', default=str(DEBUG), cast=bool)
+_cors_origins_raw = config('CORS_ALLOWED_ORIGINS', default='')
+
+CORS_ALLOW_ALL_ORIGINS = _cors_allow_all
+CORS_ALLOWED_ORIGINS = [
+    s.strip() for s in _cors_origins_raw.split(',') if s.strip()
+] if not _cors_allow_all else []
+
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_HEADERS = list(default_headers) + ['authorization']
 
 # ---------------------------------------------------------------------------
 # Payments
@@ -214,14 +257,27 @@ MOCK_PAYMENT_RESULT = os.getenv('MOCK_PAYMENT_RESULT', None)
 
 # SEGURANÇA PARA PRODUÇÃO (Só ativa quando DEBUG=False)
 if not DEBUG:
-    # Redirecionar todo o tráfego HTTP para HTTPS (W008)
+    # Redirecionar todo o tráfego HTTP para HTTPS
     SECURE_SSL_REDIRECT = True
-    
-    # Proteger os cookies para só passarem por HTTPS (W012 e W016)
+
+    # Proteger os cookies para só passarem por HTTPS
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
-        
-    # HSTS - Força os navegadores a usarem sempre HTTPS (W004)
+
+    # HSTS - Força os navegadores a usarem sempre HTTPS
     SECURE_HSTS_SECONDS = 31536000  # 1 ano
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
+
+    # Previne que o browser adivinhe o content-type (MIME sniffing)
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+
+    # Protecção XSS no browser
+    SECURE_BROWSER_XSS_FILTER = True
+    # Impede que a aplicação seja carregada num iframe (clickjacking)
+    X_FRAME_OPTIONS = 'DENY'
+
+# ---------------------------------------------------------------------------
+# Logging — configuração completa em iagromoz/logging_config.py
+# ---------------------------------------------------------------------------
+from iagromoz.logging_config import LOGGING  # noqa: E402

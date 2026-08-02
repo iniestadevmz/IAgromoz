@@ -263,3 +263,71 @@ class IsAdminOrBuyerOrSeller(BasePermission):
             or user == getattr(obj, 'seller', None)
             or user == getattr(obj, 'buyer', None)
         )
+
+
+class IsMarketplaceChatParticipant(BasePermission):
+    """Apenas o comprador, o vendedor ou um admin podem aceder ao chat."""
+
+    message = "Não tem permissão para aceder a este chat."
+
+    def has_permission(self, request, view):
+        if not (request.user and request.user.is_authenticated):
+            self.message = "Autenticação necessária."
+            return False
+        return True
+
+    def has_object_permission(self, request, view, obj):
+        user = request.user
+        # obj pode ser MarketplaceChat ou MarketplaceMessage/MarketplaceChatReservation
+        chat = obj if hasattr(obj, 'buyer') else getattr(obj, 'chat', None)
+        if chat is None:
+            return False
+        return (
+            user == chat.buyer
+            or user == chat.seller
+            or getattr(user, 'role', '') == 'ADMIN'
+            or user.is_staff
+        )
+
+
+class ProfileCompletedPermission(BasePermission):
+    """
+    Bloqueia acesso a funcionalidades privadas quando o perfil não está completo.
+    Permite sempre: consultar próprios dados, atualizar perfil, logout.
+    Bloqueia: publicar produtos, criar técnicas, enviar mensagens, reservas.
+    """
+
+    # Ações sempre permitidas mesmo sem perfil completo
+    SAFE_ACTIONS = {
+        'me', 'me_update', 'logout', 'change_password',
+        'producer_profile', 'producer_profile_update',
+        'seller_profile', 'seller_profile_update',
+        'full_profile', 'complete_profile',
+        'retrieve', 'list',
+    }
+
+    message = "Perfil incompleto. Complete o seu perfil antes de continuar."
+
+    def has_permission(self, request, view):
+        if not (request.user and request.user.is_authenticated):
+            return True  # deixar outros middlewares tratar a autenticação
+
+        # Admins nunca são bloqueados
+        if getattr(request.user, 'role', '') == 'ADMIN' or request.user.is_staff:
+            return True
+
+        # Se o perfil já está completo, passa
+        if getattr(request.user, 'profile_completed', True):
+            return True
+
+        # Ações seguras sempre permitidas
+        action = getattr(view, 'action', None)
+        if action in self.SAFE_ACTIONS:
+            return True
+
+        # Métodos de leitura sempre permitidos
+        if request.method in SAFE_METHODS:
+            return True
+
+        self.message = "Perfil incompleto. Complete o seu perfil antes de continuar."
+        return False

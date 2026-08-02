@@ -2,14 +2,18 @@ from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnl
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
-from rest_framework import status, viewsets
+from rest_framework import status, viewsets, mixins
 from rest_framework.decorators import action
 from django.db import transaction as db_transaction
+from django.utils import timezone
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import cache_page
 from django.db.models import Q
 from django.contrib.auth import get_user_model
-from api.models.marketplace import Product, ProductUnit, Rating, Transaction
-from api.serializers.marketplace import ProductSerializer, ProductUnitSerializer, TransactionSerializer
+from api.models.marketplace import Product, ProductPhoto, ProductUnit, Rating, Transaction
+from api.serializers.marketplace import ProductSerializer, ProductPhotoSerializer, ProductUnitSerializer, TransactionSerializer
 from api.permissions import IsAdminOrCanSell, IsAdminOrOwner, IsAdminOrBuyerOrSeller
+from api.services.marketplace_chat_service import get_or_create_chat_for_reservation, maybe_close_chat
 
 User = get_user_model()
 
@@ -17,23 +21,22 @@ User = get_user_model()
 class ProductViewSet(viewsets.ModelViewSet):
     queryset = Product.objects.all().order_by('-created_at')
     serializer_class = ProductSerializer
-    permission_classes = [IsAuthenticatedOrReadOnly, IsAdminOrCanSell]
+    permission_classes = [IsAuthenticatedOrReadOnly]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get_permissions(self):
+        if self.action in ('list', 'retrieve', 'categories', 'base_units'):
+            return []
         if self.action == 'create':
             return [IsAuthenticated(), IsAdminOrCanSell()]
-        
-        if self.action in ['categories', 'base_units']:
-            return []
-       
-        if self.action=='buy':
+        if self.action == 'buy':
             return [IsAuthenticated()]
-        
-        if self.action=="transactions":
-            return [IsAdminOrBuyerOrSeller]
-        
-        return [IsAdminOrOwner()]
+        if self.action in ('update', 'partial_update', 'destroy',
+                           'add_photo', 'remove_photo', 'my_products', 'link_product', 'unlink_product'):
+            return [IsAuthenticated(), IsAdminOrOwner()]
+        if self.action == 'transactions':
+            return [IsAuthenticated(), IsAdminOrCanSell()]
+        return [IsAuthenticated()]
         
 
     def perform_create(self, serializer):
@@ -48,6 +51,7 @@ class ProductViewSet(viewsets.ModelViewSet):
         serializer.save()
 
     @action(detail=False, methods=['get'], permission_classes=[])
+    @method_decorator(cache_page(60 * 60))  # cache 1 hora
     def categories(self, request):
         """GET /marketplace/products/categories/"""
         data = [
@@ -71,6 +75,7 @@ class ProductViewSet(viewsets.ModelViewSet):
         return Response(data)
 
     @action(detail=False, methods=['get'], permission_classes=[])
+    @method_decorator(cache_page(60 * 60))  # cache 1 hora
     def base_units(self, request):
         """GET /marketplace/products/base_units/ — lista unidades base do sistema."""
         return Response([
@@ -117,14 +122,17 @@ class ProductViewSet(viewsets.ModelViewSet):
             total_base = qty  # sem unit → 1:1 com unidade base
             total_price = qty * product.price
 
-        # Validar stock
-        if product.stock_quantity < total_base:
-            return Response(
-                {"detail": f"Stock insuficiente. Disponível: {product.stock_quantity} {product.base_unit}."},
-                status=400
-            )
-
         with db_transaction.atomic():
+            # select_for_update previne race condition em stock concorrente
+            product = Product.objects.select_for_update().get(pk=product.pk)
+
+            # Re-validar stock dentro da transação atómica
+            if product.stock_quantity < total_base:
+                return Response(
+                    {"detail": f"Stock insuficiente. Disponível: {product.stock_quantity} {product.base_unit}."},
+                    status=400
+                )
+
             # Deduzir stock
             product.stock_quantity -= total_base
             product.save(update_fields=['stock_quantity'])
@@ -140,7 +148,43 @@ class ProductViewSet(viewsets.ModelViewSet):
                 status='RESERVED',
             )
 
+            # Criar ou reutilizar chat de negociação para esta reserva
+            get_or_create_chat_for_reservation(txn)
+
         return Response({"detail": "Reservation created.", "id": txn.id}, status=201)
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated],
+            parser_classes=[MultiPartParser, FormParser])
+    def add_photo(self, request, pk=None):
+        """POST /marketplace/products/{id}/add_photo/ — adiciona até 5 fotos."""
+        product = self.get_object()
+        if product.seller != request.user:
+            return Response({"detail": "Not authorized."}, status=403)
+        if product.photos.count() >= 5:
+            return Response({"detail": "Máximo de 5 fotos atingido."}, status=400)
+        image = request.FILES.get('image')
+        if not image:
+            return Response({"detail": "Nenhuma imagem enviada."}, status=400)
+        photo = ProductPhoto.objects.create(
+            product=product,
+            image=image,
+            order=product.photos.count(),
+        )
+        return Response(ProductPhotoSerializer(photo).data, status=201)
+
+    @action(detail=True, methods=['delete'], url_path=r'remove_photo/(?P<photo_id>\d+)',
+            permission_classes=[IsAuthenticated])
+    def remove_photo(self, request, pk=None, photo_id=None):
+        """DELETE /marketplace/products/{id}/remove_photo/{photo_id}/"""
+        product = self.get_object()
+        if product.seller != request.user:
+            return Response({"detail": "Not authorized."}, status=403)
+        try:
+            photo = product.photos.get(id=photo_id)
+        except ProductPhoto.DoesNotExist:
+            return Response({"detail": "Foto não encontrada."}, status=404)
+        photo.delete()
+        return Response(status=204)
 
     @action(detail=True, methods=['get'], permission_classes=[IsAdminOrCanSell])
     def transactions(self, request, pk=None):
@@ -234,14 +278,26 @@ class RatingViewSet(viewsets.ViewSet):
         return Response({"detail": "Rating submitted successfully."}, status=201)
 
 
-class TransactionViewSet(viewsets.ModelViewSet):
-    queryset = Transaction.objects.all()
+class TransactionViewSet(
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    viewsets.GenericViewSet,
+):
+    """
+    Transações: apenas list e retrieve via API.
+    Acções de estado (confirm, cancel, conclude) via endpoints dedicados.
+    Não expõe create, update, destroy — evita que utilizadores manipulem transações directamente.
+    """
     serializer_class = TransactionSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsAdminOrBuyerOrSeller]
 
     def get_queryset(self):
         user = self.request.user
-        return Transaction.objects.filter(Q(buyer=user) | Q(seller=user))
+        return (
+            Transaction.objects
+            .filter(Q(buyer=user) | Q(seller=user))
+            .select_related('product', 'buyer', 'seller', 'unit')
+        )
 
     @action(detail=True, methods=['post'])
     def confirm(self, request, pk=None):
@@ -257,7 +313,6 @@ class TransactionViewSet(viewsets.ModelViewSet):
         transaction = self.get_object()
         if transaction.seller != request.user:
             return Response({"detail": "Not authorized."}, status=403)
-        # Devolver stock ao produto
         if transaction.total_base_quantity:
             with db_transaction.atomic():
                 transaction.product.stock_quantity += transaction.total_base_quantity
@@ -267,6 +322,7 @@ class TransactionViewSet(viewsets.ModelViewSet):
         else:
             transaction.status = 'CANCELLED'
             transaction.save()
+        maybe_close_chat(transaction)
         return Response({"detail": "Transaction cancelled."})
 
     @action(detail=True, methods=['post'])
@@ -276,4 +332,5 @@ class TransactionViewSet(viewsets.ModelViewSet):
             return Response({"detail": "Only the seller can conclude a transaction."}, status=403)
         transaction.status = 'COMPLETED'
         transaction.save()
+        maybe_close_chat(transaction)
         return Response({"detail": "Transaction completed."})

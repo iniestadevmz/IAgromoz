@@ -119,7 +119,7 @@ class UserViewSet(ModelViewSet):
             profile = request.user.producer_profile
         except ProducerProfile.DoesNotExist:
             return Response({"detail": "Profile not found."}, status=404)
-        return Response(ProducerProfileSerializer(profile).data)
+        return Response(ProducerProfileSerializer(profile, context={'request': request}).data)
 
     @action(detail=False, methods=['put', 'patch'], url_path='me/producer-profile/update')
     def producer_profile_update(self, request):
@@ -130,7 +130,8 @@ class UserViewSet(ModelViewSet):
         except ProducerProfile.DoesNotExist:
             return Response({"detail": "Profile not found."}, status=404)
         serializer = ProducerProfileSerializer(
-            profile, data=request.data, partial=request.method == 'PATCH'
+            profile, data=request.data, partial=request.method == 'PATCH',
+            context={'request': request}
         )
         serializer.is_valid(raise_exception=True)
         serializer.save()
@@ -146,7 +147,7 @@ class UserViewSet(ModelViewSet):
             profile = request.user.seller_profile
         except SellerProfile.DoesNotExist:
             return Response({"detail": "Profile not found."}, status=404)
-        return Response(SellerProfileSerializer(profile).data)
+        return Response(SellerProfileSerializer(profile, context={'request': request}).data)
 
     @action(detail=False, methods=['put', 'patch'], url_path='me/seller-profile/update')
     def seller_profile_update(self, request):
@@ -157,7 +158,8 @@ class UserViewSet(ModelViewSet):
         except SellerProfile.DoesNotExist:
             return Response({"detail": "Profile not found."}, status=404)
         serializer = SellerProfileSerializer(
-            profile, data=request.data, partial=request.method == 'PATCH'
+            profile, data=request.data, partial=request.method == 'PATCH',
+            context={'request': request}
         )
         serializer.is_valid(raise_exception=True)
         serializer.save()
@@ -179,14 +181,14 @@ class UserViewSet(ModelViewSet):
         # Producer profile
         if user.role == 'PRODUCER':
             try:
-                producer_data = ProducerProfileSerializer(user.producer_profile).data
+                producer_data = ProducerProfileSerializer(user.producer_profile, context={'request': request}).data
             except ProducerProfile.DoesNotExist:
                 producer_data = None
 
         # Seller profile
         if user.role == 'SELLER':
             try:
-                seller_data = SellerProfileSerializer(user.seller_profile).data
+                seller_data = SellerProfileSerializer(user.seller_profile, context={'request': request}).data
             except SellerProfile.DoesNotExist:
                 seller_data = None
 
@@ -286,6 +288,33 @@ class UserViewSet(ModelViewSet):
 
         return Response({"detail": f"Upgrade request {decision.lower()}."})
 
+
+    # ── Complete profile (Google users) ──────────────────────────────────────
+
+    @action(detail=False, methods=['patch'], url_path='me/complete-profile')
+    def complete_profile(self, request):
+        """
+        PATCH /api/users/me/complete-profile/
+        Permite ao utilizador Google completar o perfil após o primeiro login.
+        Não permite alterar: email, google_id, provider, email_verified.
+        """
+        from api.authentication.services.profile_completion import ProfileCompletionService
+
+        READONLY_FIELDS = {'email', 'google_id', 'provider', 'email_verified'}
+        data = {k: v for k, v in request.data.items() if k not in READONLY_FIELDS}
+
+        serializer = UserSerializer(request.user, data=data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        completion = ProfileCompletionService.check(request.user)
+
+        return Response({
+            'user': serializer.data,
+            'profile_completed': completion['profile_completed'],
+            'missing_fields': completion['missing_fields'],
+            'required_profile': completion['required_profile'],
+        })
 
     # ── Change password ───────────────────────────────────────────────────────
 

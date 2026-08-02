@@ -15,19 +15,26 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import path,include
-from django.http import HttpResponse
+from django.urls import path, include
+from django.http import HttpResponse, Http404
 from django.conf import settings
 from django.conf.urls.static import static
 
-def jjj(request):
-    return HttpResponse("Done")
+
+
+
+def admin_404(request, *args, **kwargs):
+    """Esconde o painel de admin Django do URL padrão."""
+    raise Http404
+
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
-    path('api/',include('api.urls')),
+    # Painel Django Admin acessível apenas via URL configurável no .env
+    # Em produção define DJANGO_ADMIN_URL=gestao-interna/ (ou outro valor não óbvio)
+    # Por defeito mantém /admin/ em desenvolvimento
+    path(
+        __import__('os').getenv('DJANGO_ADMIN_URL', 'vital/'),
+        admin.site.urls
+    ),
+    path('api/', include('api.urls')),
 ]
-
-# serve media files during development
-# if settings.DEBUG:
-#     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
