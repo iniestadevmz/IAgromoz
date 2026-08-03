@@ -64,6 +64,7 @@ class ProductUnitSerializer(serializers.ModelSerializer):
 
 class ProductSerializer(serializers.ModelSerializer):
     seller = serializers.CharField(source='seller.get_full_name', read_only=True)
+    seller_id=serializers.IntegerField(source='seller.id', read_only=True)
     average_rating = serializers.SerializerMethodField()
     total_ratings = serializers.SerializerMethodField()
     user_rated = serializers.SerializerMethodField()
@@ -82,7 +83,7 @@ class ProductSerializer(serializers.ModelSerializer):
             'district', 'province',
             'stock_quantity', 'base_unit',
             'units', 'photos',
-            'average_rating', 'total_ratings', 'user_rated',
+            'average_rating', 'total_ratings', 'user_rated','seller_id'
         ]
         read_only_fields = [
             'seller', 'created_at', 'average_rating', 'total_ratings',

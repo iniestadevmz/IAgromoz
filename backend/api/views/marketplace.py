@@ -33,6 +33,10 @@ class ProductViewSet(viewsets.ModelViewSet):
         if seller:
             qs = qs.filter(seller__id=seller)
 
+        # ?mine=true — retorna apenas os produtos do utilizador autenticado
+        if self.request.query_params.get('mine') == 'true' and self.request.user.is_authenticated:
+            qs = qs.filter(seller=self.request.user)
+
         category = self.request.query_params.get('category')
         if category:
             qs = qs.filter(category=category)
