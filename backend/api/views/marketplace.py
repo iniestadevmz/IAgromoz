@@ -246,6 +246,11 @@ class RatingViewSet(viewsets.ViewSet):
 
     @action(detail=True, methods=['post'])
     def rate_product(self, request, pk=None):
+        if pk is None or not str(pk).isdigit():
+            return Response(
+                {"detail":"Invalid Product_id"},
+                status=400
+            )
         product = Product.objects.filter(pk=pk).first()
         if not product:
             return Response({"detail": "Product not found."}, status=404)
@@ -253,7 +258,13 @@ class RatingViewSet(viewsets.ViewSet):
 
     @action(detail=True, methods=['post'])
     def rate_seller(self, request, pk=None):
-        seller = User.objects.filter(pk=pk).first()
+        if pk is None or not str(pk).isdigit():
+            return Response(
+                {"detail":"Invalid Seller_Id"},
+                status=400
+            )
+        
+        seller = User.objects.filter(pk=int(pk)).first()
         if not seller:
             return Response({"detail": "Seller not found."}, status=404)
         if not seller.can_sell:
