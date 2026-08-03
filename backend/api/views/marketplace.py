@@ -24,6 +24,29 @@ class ProductViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticatedOrReadOnly]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
+    def get_queryset(self):
+        qs = Product.objects.select_related(
+            'seller', 'district__province'
+        ).prefetch_related('photos', 'units').order_by('-created_at')
+
+        seller = self.request.query_params.get('seller')
+        if seller:
+            qs = qs.filter(seller__id=seller)
+
+        category = self.request.query_params.get('category')
+        if category:
+            qs = qs.filter(category=category)
+
+        subcategory = self.request.query_params.get('subcategory')
+        if subcategory:
+            qs = qs.filter(subcategory=subcategory)
+
+        district = self.request.query_params.get('district')
+        if district:
+            qs = qs.filter(district__id=district)
+
+        return qs
+
     def get_permissions(self):
         if self.action in ('list', 'retrieve', 'categories', 'base_units'):
             return []

@@ -24,7 +24,9 @@ class TechniqueViewSet(ModelViewSet):
     def perform_destroy(self, instance):
         user = self.request.user
         if user != instance.created_by and not user.is_staff:
-            raise PermissionError("Not authorized to delete this technique.")
+            return Response(
+                {"detail":"You have no permission to delete this technique."},
+                status=status.HTTP_403_FORBIDDEN)
         instance.delete()
 
 

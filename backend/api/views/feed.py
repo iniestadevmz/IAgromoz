@@ -31,6 +31,12 @@ class PostViewSet(viewsets.ModelViewSet):
         category = self.request.query_params.get('category')
         if category:
             qs = qs.filter(category=category)
+        author = self.request.query_params.get('author')
+        if author:
+            qs = qs.filter(author__id=author)
+        # ?mine=true — retorna apenas os posts do utilizador autenticado
+        if self.request.query_params.get('mine') == 'true' and self.request.user.is_authenticated:
+            qs = qs.filter(author=self.request.user)
         return qs
 
     def perform_create(self, serializer):
