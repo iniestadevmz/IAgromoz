@@ -20,6 +20,5 @@ def generate_response_google(prompt: str) -> str:
    
 
 
-for model in client.models.list():
-    print(f"Modelo: {model.name} - Suporta: {model.supported_actions}")
+
     
