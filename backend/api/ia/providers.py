@@ -13,12 +13,6 @@ def generate_response_google(prompt: str) -> str:
     """
 
     response = client.models.generate_content(
-        model="antigravity-preview-05-2026",
+        model="gemini-3.1-flash-lite",
         contents=prompt,
     )
-
-   
-
-
-
-    
