@@ -3,7 +3,7 @@ from django.conf import settings
 
 # Crie o client UMA vez
 client = genai.Client(api_key=settings.GOOGLE_API_KEY)
-# models = client.models.list()
+#models = client.models.list()
 
 
 
@@ -13,8 +13,13 @@ def generate_response_google(prompt: str) -> str:
     """
 
     response = client.models.generate_content(
-        model="gemini-2.5-flash",
+        model="antigravity-preview-05-2026",
         contents=prompt,
     )
 
-    return response.text
+   
+
+
+for model in client.models.list():
+    print(f"Modelo: {model.name} - Suporta: {model.supported_actions}")
+    
